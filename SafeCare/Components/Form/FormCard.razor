@@ -1,0 +1,27 @@
+﻿<MudCard>
+    <MudCardHeader Class="gray lighten-5">
+        <CardHeaderAvatar>
+            <MudAvatar Color="Color.Primary" Variant="Variant.Outlined">@Number</MudAvatar>
+        </CardHeaderAvatar>
+        <CardHeaderContent>
+            <MudText Typo="Typo.button">@Title</MudText>
+        </CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent>
+        @ChildContent
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public string Title { get; set; }
+
+    [Parameter]
+    [EditorRequired]
+    public string Number { get; set; }
+
+    [Parameter]
+    [EditorRequired]
+    public RenderFragment ChildContent { get; set; }
+}

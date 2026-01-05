@@ -1,7 +1,76 @@
 ﻿@page "/"
+@using SafeCare.Components.Form
+@using System.ComponentModel.DataAnnotations
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Zgłoszenie zdarzenia</PageTitle>
 
-<h1>Hello, world!</h1>
+<MudForm>
+    <MudStack Spacing="5">
+        <FormHeader />
+        <FormCard Title="Dane osoby zgłaszającej" Number="1">
+            <MudStack>
+                <MudStack Row Breakpoint="Breakpoint.Xs">
+                    <MudTextField @bind-Value="model.Name" Label="Imię" />
+                    <MudTextField @bind-Value="model.Surname" Label="Nazwisko" />
+                </MudStack>
+                <MudStack Row Breakpoint="Breakpoint.Xs">
+                    <MudTextField @bind-Value="model.Phone" Label="Nr telefonu" InputType="InputType.Telephone" />
+                    <MudTextField @bind-Value="model.Email" Label="Adres e-mail" InputType="InputType.Email" />
+                </MudStack>
+            </MudStack>
+        </FormCard>
+        <FormCard Title="Dane osoby której dotyczy zgłoszenie" Number="2">
+            <MudStack>
+                <MudStack Row Breakpoint="Breakpoint.Xs">
+                    <MudTextField @bind-Value="model.PatientName" Label="Imię" />
+                    <MudTextField @bind-Value="model.PatientSurname" Label="Nazwisko" />
+                </MudStack>
+                <MudStack Row Breakpoint="Breakpoint.Xs">
+                    <MudTextField @bind-Value="model.PatientDob" Format="yyyy-MM-dd" Label="Data urodzenia" InputType="InputType.Date" Clearable />
+                    <MudSpacer />
+                </MudStack>
+            </MudStack>
+        </FormCard>
+        <FormCard Title="Czas, w jakim doszło do zdarzenia" Number="3">
+            <MudStack>
+                <MudSwitch @bind-Value="model.IsDatePeriod" Label="Przedział czasu" Color="Color.Primary" Class="align-self-start"/>
+                @if (model.IsDatePeriod)
+                {
+                    <MudStack Row Breakpoint="Breakpoint.Xs">
+                        <MudTextField @bind-Value="model.DateFrom" Format="yyyy-MM-dd" Label="Od" InputType="InputType.Date" />
+                        <MudTextField @bind-Value="model.DateTo" Format="yyyy-MM-dd" Label="Do" InputType="InputType.Date" />
+                    </MudStack>
+                }
+                else
+                {
+                    <MudStack Row Breakpoint="Breakpoint.Xs">
+                        <MudTextField @bind-Value="model.Date" Format="yyyy-MM-dd" Label="Data" InputType="InputType.Date" />
+                        <MudTextField @bind-Value="model.Time" Label="Czas" InputType="InputType.Time" />
+                    </MudStack>
+                }
+            </MudStack>
+        </FormCard>
+    </MudStack>
+</MudForm>
 
-Welcome to your new app.
+@code {
+    private FormModel model = new();
+
+    public class FormModel
+    {
+        public bool IsAnonymous { get; set; }
+        public string? Name { get; set; }
+        public string? Surname { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? PatientName { get; set; }
+        public string? PatientSurname { get; set; }
+        public DateTime? PatientDob { get; set; }
+
+        public bool IsDatePeriod { get; set; }
+        public DateTime? DateFrom { get; set; }
+        public DateTime? DateTo { get; set; }
+        public DateTime? Date { get; set; }
+        public string? Time { get; set; }
+    }
+}
