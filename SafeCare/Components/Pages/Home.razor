@@ -1,10 +1,18 @@
 ﻿@page "/"
 @using SafeCare.Components.Form
 @using System.ComponentModel.DataAnnotations
+@using SafeCare.Dtos
+@using SafeCare.Enums
+@using SafeCare.Services
+@using SafeCare.Utils
+@inject IIncidentDefinitionService IncidentDefinitionService
+@inject IDepartmentService DepartmentService
+@inject ISnackbar Snackbar
+@inject IScrollManager ScrollManager
 
 <PageTitle>Zgłoszenie zdarzenia</PageTitle>
 
-<MudForm>
+<MudForm @ref="form">
     <MudStack Spacing="5">
         <FormHeader />
         <FormCard Title="Dane osoby zgłaszającej" Number="1">
@@ -14,8 +22,8 @@
                     <MudTextField @bind-Value="model.Surname" Label="Nazwisko" />
                 </MudStack>
                 <MudStack Row Breakpoint="Breakpoint.Xs">
-                    <MudTextField @bind-Value="model.Phone" Label="Nr telefonu" InputType="InputType.Telephone" />
-                    <MudTextField @bind-Value="model.Email" Label="Adres e-mail" InputType="InputType.Email" />
+                    <MudTextField @bind-Value="model.Phone" Label="Nr telefonu" InputType="InputType.Telephone" InputMode="InputMode.tel" />
+                    <MudTextField @bind-Value="model.Email" Label="Adres e-mail" InputType="InputType.Email" InputMode="InputMode.email"/>
                 </MudStack>
             </MudStack>
         </FormCard>
@@ -31,9 +39,9 @@
                 </MudStack>
             </MudStack>
         </FormCard>
-        <FormCard Title="Czas, w jakim doszło do zdarzenia" Number="3">
+        <FormCard Title="Czas i miejsce zdarzenia" Number="3">
             <MudStack>
-                <MudSwitch @bind-Value="model.IsDatePeriod" Label="Przedział czasu" Color="Color.Primary" Class="align-self-start"/>
+                <MudSwitch @bind-Value="model.IsDatePeriod" Label="Przedział czasu" Color="Color.Primary" Class="align-self-start" />
                 @if (model.IsDatePeriod)
                 {
                     <MudStack Row Breakpoint="Breakpoint.Xs">
@@ -48,13 +56,46 @@
                         <MudTextField @bind-Value="model.Time" Label="Czas" InputType="InputType.Time" />
                     </MudStack>
                 }
+                <MudAutocomplete @bind-Value="model.Department" Label="Miejsce zdarzenia" SearchFunc="SearchDepartment" MaxItems="100" />
             </MudStack>
         </FormCard>
+        <FormCard Title="Rodzaj zdarzenia" Number="4">
+            <MudStack>
+                <MudExpansionPanels MultiExpansion="true">
+                    @foreach (var category in categories.Where(x => x != IncidentCategory.Other))
+                    {
+                        <MudExpansionPanel Text="@category.GetDisplayName()">
+                            <MudStack>
+                                @foreach (var incident in incidentDefinitions.Where(x => x.Category == category))
+                                {
+                                    <MudCheckBox T="bool"
+                                                 Label="@incident.Name"
+                                                 Color="Color.Primary"
+                                                 Value="@model.SelectedIncidentDefinitions.Contains(incident)"
+                                                 ValueChanged="(isChecked)=>HandleIncidentChecked(isChecked, incident)" />
+                                }
+                            </MudStack>
+                        </MudExpansionPanel>
+                    }
+                    <MudExpansionPanel Text="@IncidentCategory.Other.GetDisplayName()">
+                        <MudTextField Label="Krótki opis" @bind-Value="model.OtherIncidentDefinition" />
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            </MudStack>
+        </FormCard>
+        <FormCard Title="Dokładny opis zdarzenia" Number="5">
+            <MudTextField @bind-Value="model.IncidentDescription" Lines="5" AutoGrow MaxLength="5000" />
+        </FormCard>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Class="align-self-center px-15">Wyślij</MudButton>
     </MudStack>
 </MudForm>
 
 @code {
     private FormModel model = new();
+    private MudForm? form;
+    private IList<IncidentDefinitionDto> incidentDefinitions = [];
+    private IList<DepartmentDto> departments = [];
+    private IList<IncidentCategory> categories = Enum.GetValues<IncidentCategory>();
 
     public class FormModel
     {
@@ -72,5 +113,55 @@
         public DateTime? DateTo { get; set; }
         public DateTime? Date { get; set; }
         public string? Time { get; set; }
+
+        public DepartmentDto? Department { get; set; }
+        public IList<IncidentDefinitionDto> SelectedIncidentDefinitions = [];
+        public string? OtherIncidentDefinition { get; set; }
+
+        public string? IncidentDescription { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        incidentDefinitions = await IncidentDefinitionService.GetAll();
+    }
+
+    private async Task<IEnumerable<DepartmentDto?>> SearchDepartment(string search, CancellationToken cancellationToken)
+    {
+        if (departments == null || !departments.Any())
+        {
+            departments = await DepartmentService.GetAll();
+        }
+
+        if (string.IsNullOrEmpty(search))
+        {
+            return departments;
+        }
+
+        return departments.Where(d => d.Name.Contains(search, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void HandleIncidentChecked(bool isChecked, IncidentDefinitionDto incident)
+    {
+        if (isChecked)
+        {
+            model.SelectedIncidentDefinitions.Add(incident);
+        }
+        else
+        {
+            model.SelectedIncidentDefinitions.Remove(incident);
+        }
+    }
+
+    private async Task Submit()
+    {
+        await form!.Validate();
+
+        if (form.IsValid)
+        {
+            Snackbar.Add("Zgłoszenie zostało wysłane, dziękujemy.", Severity.Success);
+            await form.ResetAsync();
+            await ScrollManager.ScrollToTopAsync(null);
+        }
     }
 }

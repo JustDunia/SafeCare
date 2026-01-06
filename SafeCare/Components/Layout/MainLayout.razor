@@ -5,10 +5,12 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<MudLayout>
+<MudLayout Class="pb-5 pt-2">
     <MudAppBar Dense>
-        <MudIcon Icon="@Icons.Material.Filled.LocalHospital" Size="Size.Large" Class="me-3" />
+        <MudIcon Icon="@Icons.Material.Filled.LocalHospital" Class="me-3" />
         <MudText>UDSK</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.ExitToApp" Href="https://udsk.pl/" Class="white-text"  />
     </MudAppBar>
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.Medium">
