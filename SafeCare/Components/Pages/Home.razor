@@ -5,6 +5,8 @@
 @using SafeCare.Enums
 @using SafeCare.Services
 @using SafeCare.Utils
+@using SafeCare.Validators
+@using SafeCare.ViewModels
 @inject IIncidentDefinitionService IncidentDefinitionService
 @inject IDepartmentService DepartmentService
 @inject ISnackbar Snackbar
@@ -12,38 +14,38 @@
 
 <PageTitle>Zgłoszenie zdarzenia</PageTitle>
 
-<MudForm @ref="form">
+<MudForm @ref="form" Model="@model" Validation="@(validator.ValidateValue)">
     <MudStack Spacing="5">
         <FormHeader />
         <FormCard Title="Dane osoby zgłaszającej" Number="1">
             <MudGrid>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="model.Name" Label="Imię" />
+                    <MudTextField @bind-Value="model.Name" Label="Imię" For="@(() => model.Name)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="model.Surname" Label="Nazwisko" />
+                    <MudTextField @bind-Value="model.Surname" Label="Nazwisko" For="@(() => model.Surname)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="model.Phone" Label="Nr telefonu" InputType="InputType.Telephone" InputMode="InputMode.tel" />
+                    <MudTextField @bind-Value="model.Phone" Label="Nr telefonu" InputType="InputType.Telephone" InputMode="InputMode.tel" For="@(() => model.Phone)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="model.Email" Label="Adres e-mail" InputType="InputType.Email" InputMode="InputMode.email" />
+                    <MudTextField @bind-Value="model.Email" Label="Adres e-mail" InputType="InputType.Email" InputMode="InputMode.email" For="@(() => model.Email)" />
                 </MudItem>
             </MudGrid>
         </FormCard>
         <FormCard Title="Dane osoby której dotyczy zgłoszenie" Number="2">
             <MudGrid>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="model.PatientName" Label="Imię" />
+                    <MudTextField @bind-Value="model.PatientName" Label="Imię" For="@(() => model.PatientName)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="model.PatientSurname" Label="Nazwisko" />
+                    <MudTextField @bind-Value="model.PatientSurname" Label="Nazwisko" For="@(() => model.PatientSurname)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="model.PatientDob" Format="yyyy-MM-dd" Label="Data urodzenia" InputType="InputType.Date" Clearable />
+                    <MudTextField @bind-Value="model.PatientDob" Format="yyyy-MM-dd" Label="Data urodzenia" InputType="InputType.Date" Clearable For="@(() => model.PatientDob)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudSelect @bind-Value="model.PatientGender" Label="Płeć">
+                    <MudSelect @bind-Value="model.PatientGender" Label="Płeć" For="@(() => model.PatientGender)">
                         @foreach (Gender? gender in Enum.GetValues<Gender>())
                         {
                             <MudSelectItem Value="gender">@gender?.GetDisplayName()</MudSelectItem>
@@ -55,36 +57,36 @@
         <FormCard Title="Czas i miejsce zdarzenia" Number="3">
             <MudGrid>
                 <MudItem xs="12" Class="d-flex justify-start">
-                    <MudSwitch @bind-Value="model.IsDatePeriod" Label="Przedział czasu" Color="Color.Primary" />
+                    <MudSwitch @bind-Value="model.IsDatePeriod" @bind-Value:after="HandleIsDatePeriodChanged" Label="Przedział czasu" Color="Color.Primary" />
                 </MudItem>
 
                 @if (model.IsDatePeriod)
                 {
                     <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="model.DateFrom" Format="yyyy-MM-dd" Label="Od" InputType="InputType.Date" />
+                        <MudTextField @bind-Value="model.DateFrom" Format="yyyy-MM-dd" Label="Od" InputType="InputType.Date" For="@(() => model.DateFrom)" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="model.DateTo" Format="yyyy-MM-dd" Label="Do" InputType="InputType.Date" />
+                        <MudTextField @bind-Value="model.DateTo" Format="yyyy-MM-dd" Label="Do" InputType="InputType.Date" For="@(() => model.DateTo)" />
                     </MudItem>
                 }
                 else
                 {
                     <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="model.Date" Format="yyyy-MM-dd" Label="Data" InputType="InputType.Date" />
+                        <MudTextField @bind-Value="model.Date" Format="yyyy-MM-dd" Label="Data" InputType="InputType.Date" For="@(() => model.Date)" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="model.Time" Label="Czas" InputType="InputType.Time" />
+                        <MudTextField @bind-Value="model.Time" Label="Czas" InputType="InputType.Time" For="@(() => model.Time)" />
                     </MudItem>
                 }
 
                 <MudItem xs="12">
-                    <MudAutocomplete @bind-Value="model.Department" Label="Miejsce zdarzenia" SearchFunc="SearchDepartment" MaxItems="100" />
+                    <MudAutocomplete @bind-Value="model.Department" Label="Miejsce zdarzenia" SearchFunc="SearchDepartment" MaxItems="100" For="@(() => model.Department)" />
                 </MudItem>
             </MudGrid>
         </FormCard>
         <FormCard Title="Rodzaj zdarzenia" Number="4">
             <MudStack>
-                <MudExpansionPanels MultiExpansion="true">
+                <MudExpansionPanels MultiExpansion="true" @ref="expansionPanels">
                     @foreach (var category in categories.Where(x => x != IncidentCategory.Other))
                     {
                         <MudExpansionPanel Text="@category.GetDisplayName()">
@@ -104,43 +106,28 @@
                         <MudTextField Label="Krótki opis" @bind-Value="model.OtherIncidentDefinition" />
                     </MudExpansionPanel>
                 </MudExpansionPanels>
+                @if (!string.IsNullOrEmpty(incidentDefinitionsError))
+                {
+                    <MudText Color="Color.Error" Typo="Typo.caption">@incidentDefinitionsError</MudText>
+                }
             </MudStack>
         </FormCard>
         <FormCard Title="Dokładny opis zdarzenia" Number="5">
-            <MudTextField @bind-Value="model.IncidentDescription" Lines="5" AutoGrow MaxLength="5000" />
+            <MudTextField @bind-Value="model.IncidentDescription" Lines="5" AutoGrow MaxLength="5000" For="@(() => model.IncidentDescription)" />
         </FormCard>
         <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Class="align-self-center px-15">Wyślij</MudButton>
     </MudStack>
 </MudForm>
 
 @code {
-    private FormModel model = new();
+    private IncidentRegistrationFormVm model = new();
     private MudForm? form;
+    private IncidentRegistrationFormValidator validator = new();
     private IList<IncidentDefinitionDto> incidentDefinitions = [];
     private IList<DepartmentDto> departments = [];
     private IList<IncidentCategory> categories = Enum.GetValues<IncidentCategory>();
-
-    public class FormModel
-    {
-        public bool IsAnonymous { get; set; }
-        public string? Name { get; set; }
-        public string? Surname { get; set; }
-        public string? Phone { get; set; }
-        public string? Email { get; set; }
-        public string? PatientName { get; set; }
-        public string? PatientSurname { get; set; }
-        public DateTime? PatientDob { get; set; }
-        public Gender? PatientGender { get; set; }
-        public bool IsDatePeriod { get; set; }
-        public DateTime? DateFrom { get; set; }
-        public DateTime? DateTo { get; set; }
-        public DateTime? Date { get; set; }
-        public string? Time { get; set; }
-        public DepartmentDto? Department { get; set; }
-        public IList<IncidentDefinitionDto> SelectedIncidentDefinitions { get; set; } = [];
-        public string? OtherIncidentDefinition { get; set; }
-        public string? IncidentDescription { get; set; }
-    }
+    private string? incidentDefinitionsError;
+    private MudExpansionPanels? expansionPanels;
 
     protected override async Task OnInitializedAsync()
     {
@@ -172,17 +159,42 @@
         {
             model.SelectedIncidentDefinitions.Remove(incident);
         }
+
+        incidentDefinitionsError = null;
     }
 
     private async Task Submit()
     {
         await form!.Validate();
 
+        var incidentErrors = await validator.ValidateValue(model, nameof(model.SelectedIncidentDefinitions));
+        if (incidentErrors.Any())
+        {
+            incidentDefinitionsError = incidentErrors.FirstOrDefault();
+        }
+
         if (form.IsValid)
         {
             Snackbar.Add("Zgłoszenie zostało wysłane, dziękujemy.", Severity.Success);
+            model = new();
+            incidentDefinitionsError = null;
+            await expansionPanels!.CollapseAllAsync();
             await form.ResetAsync();
             await ScrollManager.ScrollToTopAsync(null);
+        }
+    }
+
+    private void HandleIsDatePeriodChanged()
+    {
+        if (model.IsDatePeriod)
+        {
+            model.Date = null;
+            model.Time = null;
+        }
+        else
+        {
+            model.DateFrom = null;
+            model.DateTo = null;
         }
     }
 }
