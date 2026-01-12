@@ -16,48 +16,71 @@
     <MudStack Spacing="5">
         <FormHeader />
         <FormCard Title="Dane osoby zgłaszającej" Number="1">
-            <MudStack>
-                <MudStack Row Breakpoint="Breakpoint.Xs">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="model.Name" Label="Imię" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="model.Surname" Label="Nazwisko" />
-                </MudStack>
-                <MudStack Row Breakpoint="Breakpoint.Xs">
+                </MudItem>
+                <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="model.Phone" Label="Nr telefonu" InputType="InputType.Telephone" InputMode="InputMode.tel" />
-                    <MudTextField @bind-Value="model.Email" Label="Adres e-mail" InputType="InputType.Email" InputMode="InputMode.email"/>
-                </MudStack>
-            </MudStack>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="model.Email" Label="Adres e-mail" InputType="InputType.Email" InputMode="InputMode.email" />
+                </MudItem>
+            </MudGrid>
         </FormCard>
         <FormCard Title="Dane osoby której dotyczy zgłoszenie" Number="2">
-            <MudStack>
-                <MudStack Row Breakpoint="Breakpoint.Xs">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="model.PatientName" Label="Imię" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="model.PatientSurname" Label="Nazwisko" />
-                </MudStack>
-                <MudStack Row Breakpoint="Breakpoint.Xs">
+                </MudItem>
+                <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="model.PatientDob" Format="yyyy-MM-dd" Label="Data urodzenia" InputType="InputType.Date" Clearable />
-                    <MudSpacer />
-                </MudStack>
-            </MudStack>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="model.PatientGender" Label="Płeć">
+                        @foreach (Gender? gender in Enum.GetValues<Gender>())
+                        {
+                            <MudSelectItem Value="gender">@gender?.GetDisplayName()</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
         </FormCard>
         <FormCard Title="Czas i miejsce zdarzenia" Number="3">
-            <MudStack>
-                <MudSwitch @bind-Value="model.IsDatePeriod" Label="Przedział czasu" Color="Color.Primary" Class="align-self-start" />
+            <MudGrid>
+                <MudItem xs="12" Class="d-flex justify-start">
+                    <MudSwitch @bind-Value="model.IsDatePeriod" Label="Przedział czasu" Color="Color.Primary" />
+                </MudItem>
+
                 @if (model.IsDatePeriod)
                 {
-                    <MudStack Row Breakpoint="Breakpoint.Xs">
+                    <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="model.DateFrom" Format="yyyy-MM-dd" Label="Od" InputType="InputType.Date" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="model.DateTo" Format="yyyy-MM-dd" Label="Do" InputType="InputType.Date" />
-                    </MudStack>
+                    </MudItem>
                 }
                 else
                 {
-                    <MudStack Row Breakpoint="Breakpoint.Xs">
+                    <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="model.Date" Format="yyyy-MM-dd" Label="Data" InputType="InputType.Date" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="model.Time" Label="Czas" InputType="InputType.Time" />
-                    </MudStack>
+                    </MudItem>
                 }
-                <MudAutocomplete @bind-Value="model.Department" Label="Miejsce zdarzenia" SearchFunc="SearchDepartment" MaxItems="100" />
-            </MudStack>
+
+                <MudItem xs="12">
+                    <MudAutocomplete @bind-Value="model.Department" Label="Miejsce zdarzenia" SearchFunc="SearchDepartment" MaxItems="100" />
+                </MudItem>
+            </MudGrid>
         </FormCard>
         <FormCard Title="Rodzaj zdarzenia" Number="4">
             <MudStack>
@@ -107,17 +130,15 @@
         public string? PatientName { get; set; }
         public string? PatientSurname { get; set; }
         public DateTime? PatientDob { get; set; }
-
+        public Gender? PatientGender { get; set; }
         public bool IsDatePeriod { get; set; }
         public DateTime? DateFrom { get; set; }
         public DateTime? DateTo { get; set; }
         public DateTime? Date { get; set; }
         public string? Time { get; set; }
-
         public DepartmentDto? Department { get; set; }
-        public IList<IncidentDefinitionDto> SelectedIncidentDefinitions = [];
+        public IList<IncidentDefinitionDto> SelectedIncidentDefinitions { get; set; } = [];
         public string? OtherIncidentDefinition { get; set; }
-
         public string? IncidentDescription { get; set; }
     }
 
