@@ -15,6 +15,7 @@
 @inject ITimezoneService TimezoneService
 @inject ISnackbar Snackbar
 @inject IScrollManager ScrollManager
+@inject ILogger<Home> Logger
 
 <PageTitle>Zgłoszenie zdarzenia</PageTitle>
 
@@ -180,7 +181,8 @@
             try
             {
                 var dto = await model.ToDtoAsync(TimezoneService);
-                await IncidentReportService.CreateReport(dto);
+                var reportId = await IncidentReportService.CreateReport(dto);
+                Logger.LogInformation($"Incident report submitted successfully with Id {reportId}.");
 
                 Snackbar.Add("Zgłoszenie zostało wysłane, dziękujemy.", Severity.Success);
                 model = new();
@@ -191,10 +193,12 @@
             }
             catch (DomainException dex)
             {
+                Logger.LogWarning(dex, "A domain error occurred while submitting the incident report: {Message}", dex.Message);
                 Snackbar.Add($"Wystąpił błąd podczas wysyłania zgłoszenia: {dex.Message}", Severity.Error);
             }
-            catch
+            catch(Exception ex)
             {
+                Logger.LogError(ex, "An unexpected error occurred while submitting the incident report.");
                 Snackbar.Add($"Wystąpił błąd podczas wysyłania zgłoszenia.", Severity.Error);
             }
         }
