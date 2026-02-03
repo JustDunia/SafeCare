@@ -1,0 +1,88 @@
+@namespace SafeCare.Components.Form
+@using SafeCare.Services
+@inject IBotDetectionService BotDetectionService
+@inject ILogger<HoneypotFields> Logger
+
+@* 
+    Honeypot fields for bot detection.
+    These fields are hidden from humans using multiple CSS techniques but visible to bots.
+    Best practices applied:
+    1. Off-screen positioning (not display:none which bots detect)
+    2. Zero opacity and height
+    3. Realistic field names that attract bots
+    4. tabindex="-1" to prevent keyboard navigation
+    5. autocomplete="off" to prevent browser autofill
+    6. aria-hidden="true" for accessibility
+*@
+
+@* Container styled to be completely invisible to humans but parseable by bots *@
+<div class="safecare-hp" aria-hidden="true" style="position: absolute; left: -9999px; top: -9999px; width: 1px; height: 1px; overflow: hidden; opacity: 0;">
+    @* Field 1: Looks like a secondary email field *@
+    <label for="email2">Email potwierdzaj¹cy</label>
+    <input type="email" 
+           id="email2" 
+           name="email2" 
+           @bind="_email2" 
+           tabindex="-1" 
+           autocomplete="off" />
+    
+    @* Field 2: Looks like a website/URL field - very attractive to spam bots *@
+    <label for="website">Strona internetowa</label>
+    <input type="url" 
+           id="website" 
+           name="website" 
+           @bind="_website" 
+           tabindex="-1" 
+           autocomplete="off" />
+    
+    @* Field 3: Looks like an address field *@
+    <label for="address">Adres</label>
+    <input type="text" 
+           id="address" 
+           name="address" 
+           @bind="_address" 
+           tabindex="-1" 
+           autocomplete="off" />
+</div>
+
+@code {
+    private DateTime _formLoadedAt = DateTime.UtcNow;
+    private string? _email2;
+    private string? _website;
+    private string? _address;
+
+    /// <summary>
+    /// Validates the honeypot fields to detect bot submissions.
+    /// </summary>
+    /// <returns>True if submission appears to be from a human, false if bot detected.</returns>
+    public bool Validate()
+    {
+        var honeypotData = new HoneypotData
+        {
+            FormLoadedAt = _formLoadedAt,
+            Email2 = _email2,
+            Website = _website,
+            Address = _address
+        };
+
+        var isValid = BotDetectionService.ValidateSubmission(honeypotData);
+        
+        if (!isValid)
+        {
+            Logger.LogWarning("Bot detected via honeypot validation");
+        }
+
+        return isValid;
+    }
+
+    /// <summary>
+    /// Resets the honeypot state for a new form submission.
+    /// </summary>
+    public void Reset()
+    {
+        _formLoadedAt = DateTime.UtcNow;
+        _email2 = null;
+        _website = null;
+        _address = null;
+    }
+}
