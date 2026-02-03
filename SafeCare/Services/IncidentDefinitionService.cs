@@ -14,9 +14,11 @@ namespace SafeCare.Services
 
     public class IncidentDefinitionService(IDbContextFactory<AppDbContext> dbContextFactory) : IIncidentDefinitionService
     {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory = dbContextFactory;
+
         public async Task<IList<IncidentDefinitionDto>> GetAll()
         {
-            using var dbContext = dbContextFactory.CreateDbContext();
+            using var dbContext = _dbContextFactory.CreateDbContext();
             return await dbContext.IncidentDefinitions
                 .AsNoTracking()
                 .Select(x => x.ToDto())
@@ -25,7 +27,7 @@ namespace SafeCare.Services
 
         public async Task<IList<IncidentDefinitionDto>> GetByCategory(IncidentCategory category)
         {
-            using var dbContext = dbContextFactory.CreateDbContext();
+            using var dbContext = _dbContextFactory.CreateDbContext();
             return await dbContext.IncidentDefinitions
                 .AsNoTracking()
                 .Where(x => x.Category == category)

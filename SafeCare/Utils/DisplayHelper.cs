@@ -1,8 +1,9 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Reflection;
 
 namespace SafeCare.Utils
 {
-    public static class EnumExtensions
+    public static class DisplayHelper
     {
         extension<T>(T value) where T : Enum
         {
@@ -13,6 +14,12 @@ namespace SafeCare.Utils
 
                 return attribute?.Name ?? value.ToString();
             }
+        }
+
+        public static string GetDisplayName(Type type)
+        {
+            return type.GetCustomAttribute<DisplayAttribute>()?.Name
+                ?? type.Name;
         }
     }
 }

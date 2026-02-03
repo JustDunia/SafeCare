@@ -19,6 +19,8 @@ builder.Services.AddDbContextFactory<AppDbContext>();
 
 builder.Services.AddScoped<IIncidentDefinitionService, IncidentDefinitionService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+builder.Services.AddScoped<IIncidentReportService, IncidentReportService>();
+builder.Services.AddScoped<ITimezoneService, TimezoneService>();
 
 var app = builder.Build();
 

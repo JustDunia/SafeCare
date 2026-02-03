@@ -12,9 +12,11 @@ namespace SafeCare.Services
 
     public class DepartmentService(IDbContextFactory<AppDbContext> dbContextFactory) : IDepartmentService
     {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory = dbContextFactory;
+
         public async Task<IList<DepartmentDto>> GetAll()
         {
-            using var dbContext = dbContextFactory.CreateDbContext();
+            using var dbContext = _dbContextFactory.CreateDbContext();
             return await dbContext.Departments
                 .AsNoTracking()
                 .Select(x => x.ToDto())

@@ -7,6 +7,7 @@ namespace SafeCare.Data
     {
         public DbSet<IncidentDefinition> IncidentDefinitions { get; set; }
         public DbSet<Department> Departments { get; set; }
+        public DbSet<IncidentReport> IncidentReports { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
@@ -35,6 +36,69 @@ namespace SafeCare.Data
                 .Entity<Department>()
                 .Property(d => d.Code)
                 .HasMaxLength(10);
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.Name)
+                .HasMaxLength(50);
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.Surname)
+                .HasMaxLength(50);
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.Phone)
+                .HasMaxLength(15);
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.Email)
+                .HasMaxLength(100);
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.PatientName)
+                .HasMaxLength(50);
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.PatientSurname)
+                .HasMaxLength(50);
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.PatientGender)
+                .IsRequired()
+                .HasConversion<string>();
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.IncidentDescription)
+                .HasMaxLength(5000);
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.PatientDob)
+                .HasColumnType("date");
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .Property(ir => ir.OtherIncidentDefinition)
+                .HasMaxLength(255);
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .HasOne(ir => ir.Department)
+                .WithMany()
+                .HasForeignKey(ir => ir.DepartmentId)
+                .IsRequired();
+
+            modelBuilder
+                .Entity<IncidentReport>()
+                .HasMany(ir => ir.IncidentDefinitions)
+                .WithMany(id => id.ReportsWithIncident);
         }
     }
 }

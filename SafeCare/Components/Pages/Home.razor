@@ -3,12 +3,16 @@
 @using System.ComponentModel.DataAnnotations
 @using SafeCare.Dtos
 @using SafeCare.Enums
+@using SafeCare.Exceptions
 @using SafeCare.Services
 @using SafeCare.Utils
 @using SafeCare.Validators
 @using SafeCare.ViewModels
+@using SafeCare.Mappings
 @inject IIncidentDefinitionService IncidentDefinitionService
 @inject IDepartmentService DepartmentService
+@inject IIncidentReportService IncidentReportService
+@inject ITimezoneService TimezoneService
 @inject ISnackbar Snackbar
 @inject IScrollManager ScrollManager
 
@@ -45,11 +49,9 @@
                     <MudTextField @bind-Value="model.PatientDob" Format="yyyy-MM-dd" Label="Data urodzenia" InputType="InputType.Date" Clearable For="@(() => model.PatientDob)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudSelect @bind-Value="model.PatientGender" Label="Płeć" For="@(() => model.PatientGender)">
-                        @foreach (Gender? gender in Enum.GetValues<Gender>())
-                        {
-                            <MudSelectItem Value="gender">@gender?.GetDisplayName()</MudSelectItem>
-                        }
+                    <MudSelect @bind-Value="model.PatientGender" Label="Płeć" For="@(() => model.PatientGender)" Clearable>
+                        <MudSelectItem T="Gender ?" Value="Gender.Female">@Gender.Female.GetDisplayName()</MudSelectItem>
+                        <MudSelectItem T="Gender ?" Value="Gender.Male">@Gender.Male.GetDisplayName()</MudSelectItem>
                     </MudSelect>
                 </MudItem>
             </MudGrid>
@@ -175,12 +177,26 @@
 
         if (form.IsValid)
         {
-            Snackbar.Add("Zgłoszenie zostało wysłane, dziękujemy.", Severity.Success);
-            model = new();
-            incidentDefinitionsError = null;
-            await expansionPanels!.CollapseAllAsync();
-            await form.ResetAsync();
-            await ScrollManager.ScrollToTopAsync(null);
+            try
+            {
+                var dto = await model.ToDtoAsync(TimezoneService);
+                await IncidentReportService.CreateReport(dto);
+
+                Snackbar.Add("Zgłoszenie zostało wysłane, dziękujemy.", Severity.Success);
+                model = new();
+                incidentDefinitionsError = null;
+                await expansionPanels!.CollapseAllAsync();
+                await form.ResetAsync();
+                await ScrollManager.ScrollToTopAsync(null);
+            }
+            catch (DomainException dex)
+            {
+                Snackbar.Add($"Wystąpił błąd podczas wysyłania zgłoszenia: {dex.Message}", Severity.Error);
+            }
+            catch
+            {
+                Snackbar.Add($"Wystąpił błąd podczas wysyłania zgłoszenia.", Severity.Error);
+            }
         }
     }
 
