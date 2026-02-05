@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor;
 using MudBlazor.Services;
 using SafeCare.Components;
 using SafeCare.Data;
+using SafeCare.Endpoints;
 using SafeCare.Middlewares;
 using SafeCare.Services;
 using SafeCare.Utils;
@@ -60,6 +62,8 @@ try
     app.MapStaticAssets();
     app.MapRazorComponents<App>()
         .AddInteractiveServerRenderMode();
+
+    app.MapLoginEndpoint();
 
     app.Run();
 }
