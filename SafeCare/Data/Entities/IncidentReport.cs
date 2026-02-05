@@ -1,4 +1,6 @@
-﻿using SafeCare.Enums;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using SafeCare.Enums;
 using SafeCare.Exceptions;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
@@ -102,6 +104,51 @@ namespace SafeCare.Data.Entities
                     throw new DomainException("Konkretna data i godzina nie może być w przyszłości.");
                 }
             }
+        }
+    }
+
+    public class IncidentReportEntityConfiguration : IEntityTypeConfiguration<IncidentReport>
+    {
+        public void Configure(EntityTypeBuilder<IncidentReport> builder)
+        {
+            builder.Property(ir => ir.Name)
+                .HasMaxLength(50);
+
+            builder.Property(ir => ir.Surname)
+                .HasMaxLength(50);
+
+            builder.Property(ir => ir.Phone)
+                .HasMaxLength(15);
+
+            builder.Property(ir => ir.Email)
+                .HasMaxLength(100);
+
+            builder.Property(ir => ir.PatientName)
+                .HasMaxLength(50);
+
+            builder.Property(ir => ir.PatientSurname)
+                .HasMaxLength(50);
+
+            builder.Property(ir => ir.PatientGender)
+                .IsRequired()
+                .HasConversion<string>();
+
+            builder.Property(ir => ir.IncidentDescription)
+                .HasMaxLength(5000);
+
+            builder.Property(ir => ir.PatientDob)
+                .HasColumnType("date");
+
+            builder.Property(ir => ir.OtherIncidentDefinition)
+                .HasMaxLength(255);
+
+            builder.HasOne(ir => ir.Department)
+                .WithMany()
+                .HasForeignKey(ir => ir.DepartmentId)
+                .IsRequired();
+
+            builder.HasMany(ir => ir.IncidentDefinitions)
+                .WithMany(id => id.ReportsWithIncident);
         }
     }
 }

@@ -20,16 +20,18 @@ try
 
     builder.Services.AddCustomRateLimiter();
 
+    builder.Services.AddDbContextFactory<AppDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    builder.Services.AddIdentity();
+
     builder.Services.AddRazorComponents()
         .AddInteractiveServerComponents();
-
 
     builder.Services.AddMudServices(config =>
     {
         config.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.TopCenter;
     });
 
-    builder.Services.AddDbContextFactory<AppDbContext>();
 
     builder.Services.AddSingleton<IBotDetectionService, BotDetectionService>();
 
