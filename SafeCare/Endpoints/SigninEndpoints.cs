@@ -5,9 +5,9 @@ using Serilog;
 
 namespace SafeCare.Endpoints
 {
-    public static class LoginEndpoint
+    public static class SigninEndpoints
     {
-        public static void MapLoginEndpoint(this IEndpointRouteBuilder app)
+        public static void MapSignInEndpoint(this IEndpointRouteBuilder app)
         {
             app.MapPost("/signin", async (
                [FromForm] string userName,
@@ -55,6 +55,19 @@ namespace SafeCare.Endpoints
 
                 Log.Warning("Failed login attempt for user {UserName}", userName);
                 return Results.Redirect("/login?error=InvalidCredentials");
+            });
+        }
+
+        public static void MapSignOutEndpoint(this IEndpointRouteBuilder app)
+        {
+            app.MapPost("/signout", async (SignInManager<User> signInManager, HttpContext httpContext) =>
+            {
+                var userName = httpContext.User.Identity?.Name ?? "Unknown";
+                await signInManager.SignOutAsync();
+
+                Log.Information("User {UserName} signed out successfully", userName);
+
+                return Results.Redirect("/login");
             });
         }
     }

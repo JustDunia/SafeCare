@@ -1,4 +1,9 @@
-﻿@inherits LayoutComponentBase
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using SafeCare.Data.Entities
+@using Serilog
+@inherits LayoutComponentBase
+@inject UserManager<User> UserManager
 
 <MudThemeProvider />
 <MudPopoverProvider />
@@ -7,26 +12,51 @@
 
 <MudLayout Class="pb-5 pt-2">
     <MudAppBar Dense>
-        <MudIcon Icon="@Icons.Material.Filled.LocalHospital" Class="me-3" />
-        <MudText>UDSK</MudText>
+        <MudButton Class="white-text" Color="Color.Inherit" Href="https://udsk.pl/">
+            <MudIcon Icon="@Icons.Material.Filled.LocalHospital" Class="me-3" />
+            <MudText>UDSK</MudText>
+        </MudButton>
         <MudSpacer />
-        <MudIconButton Icon="@Icons.Material.Filled.Dashboard" Href="/dashboard" Class="white-text" />
-        <MudIconButton Icon="@Icons.Material.Filled.ExitToApp" Href="https://udsk.pl/" Class="white-text" />
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter">
+                    <ActivatorContent>
+                        <MudButton Color="Color.Inherit">
+                            <MudText Class="me-3">@firstName @lastName</MudText>
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Class="white-text" />
+                        </MudButton>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem>
+                            <ChildContent>
+                                <form method="post" action="/signout" id="logoutForm">
+                                    <MudButton Size="Size.Small" ButtonType="ButtonType.Submit">Wyloguj</MudButton>
+                                </form>
+                            </ChildContent>
+                        </MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+                @if (currentPath == "/")
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Dashboard" Href="/dashboard" Class="white-text" />
+                }
+                else
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.ExitToApp" Href="/" Class="white-text" />
+                }
+            </Authorized>
+            <NotAuthorized>
+                <MudIconButton Icon="@Icons.Material.Filled.Dashboard" Href="/dashboard" Class="white-text" />
+            </NotAuthorized>
+        </AuthorizeView>
     </MudAppBar>
     <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Medium">
-            @Body
-        </MudContainer>
+        <CascadingValue Value="this">
+            <MudContainer MaxWidth="MaxWidth.Medium">
+                @Body
+            </MudContainer>
+        </CascadingValue>
     </MudMainContent>
-    @* TODO Nie app bar, tylko jakiś kontener na dole *@
-    @* <MudAppBar Bottom Color="Color.Transparent" ToolBarClass="justify-center" Dense>
-        <MudText>
-            Made with
-            <MudIcon Icon="@Icons.Material.Sharp.FavoriteBorder" Color="Color.Primary" Size="Size.Small" Class="pt-1"/>
-            by
-            <MudLink Href="https://github.com/JustDunia" Target="_blank">JustDunia</MudLink>
-        </MudText>
-    </MudAppBar> *@
 </MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
@@ -34,3 +64,36 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? authentication { get; set; }
+
+    private string currentPath = "/";
+    private string firstName = string.Empty;
+    private string lastName = string.Empty;
+
+    public void SetPath(string path)
+    {
+        currentPath = path;
+        StateHasChanged();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        if (authentication is not null)
+        {
+            var authState = await authentication;
+            var user = authState.User;
+            if (user.Identity is not null && user.Identity.IsAuthenticated)
+            {
+                var userEntity = await UserManager.GetUserAsync(authState.User)
+                    ?? throw new InvalidOperationException("Authenticated user not found in database.");
+                firstName = userEntity.FirstName;
+                lastName = userEntity.LastName;
+            }
+        }
+    }
+}

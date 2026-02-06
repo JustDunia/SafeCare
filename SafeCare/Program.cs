@@ -63,7 +63,8 @@ try
     app.MapRazorComponents<App>()
         .AddInteractiveServerRenderMode();
 
-    app.MapLoginEndpoint();
+    app.MapSignInEndpoint();
+    app.MapSignOutEndpoint();
 
     app.Run();
 }

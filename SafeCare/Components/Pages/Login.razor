@@ -72,8 +72,13 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
 
+    [CascadingParameter]
+    private MainLayout MainLayout { get; set; } = default!;
+
     protected override async Task OnInitializedAsync()
     {
+        MainLayout.SetPath("/login");
+
         ErrorMessage = Error switch
         {
             "InvalidCredentials" => "Nieprawidłowa nazwa użytkownika lub hasło.",

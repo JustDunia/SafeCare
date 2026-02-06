@@ -6,5 +6,11 @@
 <h3>Dashboard</h3>
 
 @code {
+    [CascadingParameter]
+    private MainLayout MainLayout { get; set; } = default!;
 
+    protected override void OnInitialized()
+    {
+        MainLayout.SetPath("/dashboard");
+    }
 }

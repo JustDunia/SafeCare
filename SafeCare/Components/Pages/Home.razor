@@ -126,6 +126,9 @@
 </MudForm>
 
 @code {
+    [CascadingParameter]
+    private MainLayout MainLayout { get; set; } = default!;
+
     private IncidentRegistrationFormVm model = new();
     private MudForm? form;
     private IncidentRegistrationFormValidator validator = new();
@@ -139,6 +142,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        MainLayout.SetPath("/");
         incidentDefinitions = await IncidentDefinitionService.GetAll();
     }
 
@@ -220,7 +224,7 @@
                 Logger.LogWarning(dex, "A domain error occurred while submitting the incident report: {Message}", dex.Message);
                 Snackbar.Add($"Wyst¹pi³ b³¹d podczas wysy³ania zg³oszenia: {dex.Message}", Severity.Error);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Logger.LogError(ex, "An unexpected error occurred while submitting the incident report.");
                 Snackbar.Add($"Wyst¹pi³ b³¹d podczas wysy³ania zg³oszenia.", Severity.Error);
