@@ -1,0 +1,10 @@
+﻿@page "/details/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<p>@Id</p>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+}

@@ -7,6 +7,7 @@
 @using SafeCare.Utils;
 @inject IIncidentReportService IncidentReportService
 @inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
 
 @page "/dashboard"
 @attribute [Authorize]
@@ -29,7 +30,7 @@
         </MudSelect>
         <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" OnClick="ClearFilters" title="Wyczyść filtry" />
     </MudGrid>
-    <MudDataGrid T="IncidentReportsGridItem" ServerData="LoadData" Height="calc(100vh - 200px)" FixedHeader Striped Bordered Dense SortMode="SortMode.Single" Elevation="4" ShowColumnOptions="false" @ref="grid">
+    <MudDataGrid T="IncidentReportsGridItem" ServerData="LoadData" Height="calc(100vh - 200px)" FixedHeader Striped Bordered Dense SortMode="SortMode.Single" Elevation="4" ShowColumnOptions="false" @ref="grid" CurrentPage="currentPage" RowsPerPage="currentPageSize" SortDefinitions="gridSortDefinitions">
         <Columns>
             <PropertyColumn Property="x => x.Id" Title="Lp." StickyLeft HeaderStyle="width: 80px;" />
             <PropertyColumn Property="x => x.FullName" Title="Zgłaszający" HeaderStyle="width: 200px;" />
@@ -70,15 +71,136 @@
     [CascadingParameter]
     private MainLayout MainLayout { get; set; } = default!;
 
+    [SupplyParameterFromQuery(Name = "fullName")]
+    public string? FullNameQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "patientFullName")]
+    public string? PatientFullNameQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "gender")]
+    public string? GenderQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "department")]
+    public string? DepartmentQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "categories")]
+    public string? CategoriesQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? PageQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "pageSize")]
+    public int? PageSizeQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "sortBy")]
+    public string? SortByQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "sortDesc")]
+    public bool? SortDescQuery { get; set; }
+
     private IncidentReportsRequestVm request = new();
     private MudDataGrid<IncidentReportsGridItem> grid = new();
     private IncidentCategory? selectedCategory = null;
+    private int currentPage = IncidentReportsRequestVm.DefaultPage;
+    private int currentPageSize = IncidentReportsRequestVm.DefaultPageSize;
+    private string? currentSortBy = IncidentReportsRequestVm.DefaultSortBy;
+    private bool currentSortDescending = IncidentReportsRequestVm.DefaultSortDescending;
+    private Dictionary<string, SortDefinition<IncidentReportsGridItem>> gridSortDefinitions = new();
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        InitializeFiltersFromQuery();
+    }
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
         MainLayout.SetPath("/dashboard");
     }
+
+    private void InitializeFiltersFromQuery()
+    {
+        request.Filter.FullName = FullNameQuery;
+        request.Filter.PatientFullName = PatientFullNameQuery;
+        request.Filter.Department = DepartmentQuery;
+
+        if (!string.IsNullOrEmpty(GenderQuery) && Enum.TryParse<Gender>(GenderQuery, out var gender))
+        {
+            request.Filter.Gender = gender;
+        }
+
+        if (!string.IsNullOrEmpty(CategoriesQuery))
+        {
+            var categoryNames = CategoriesQuery.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            var categories = categoryNames
+                .Select(name => Enum.TryParse<IncidentCategory>(name, out var cat) ? (IncidentCategory?)cat : null)
+                .Where(c => c.HasValue)
+                .ToList();
+            request.Filter.Categories = categories;
+        }
+
+        currentPage = PageQuery ?? IncidentReportsRequestVm.DefaultPage;
+            currentPageSize = PageSizeQuery ?? IncidentReportsRequestVm.DefaultPageSize;
+
+            if (!string.IsNullOrEmpty(SortByQuery))
+            {
+                currentSortBy = SortByQuery;
+                currentSortDescending = SortDescQuery ?? false;
+            }
+
+            if (!string.IsNullOrEmpty(currentSortBy))
+            {
+                gridSortDefinitions = new Dictionary<string, SortDefinition<IncidentReportsGridItem>>
+                {
+                    { currentSortBy, new SortDefinition<IncidentReportsGridItem>(currentSortBy, currentSortDescending, 0, null!) }
+                };
+            }
+        }
+
+    private void UpdateQueryParameters()
+    {
+        var queryParams = new Dictionary<string, object?>();
+
+        if (!string.IsNullOrEmpty(request.Filter.FullName))
+            queryParams["fullName"] = request.Filter.FullName;
+
+        if (!string.IsNullOrEmpty(request.Filter.PatientFullName))
+            queryParams["patientFullName"] = request.Filter.PatientFullName;
+
+        if (request.Filter.Gender.HasValue)
+            queryParams["gender"] = request.Filter.Gender.Value.ToString();
+
+        if (!string.IsNullOrEmpty(request.Filter.Department))
+            queryParams["department"] = request.Filter.Department;
+
+        if (request.Filter.Categories?.Any() == true)
+        {
+            var categoryNames = request.Filter.Categories
+                .Where(c => c.HasValue)
+                .Select(c => c!.Value.ToString());
+            queryParams["categories"] = string.Join(",", categoryNames);
+        }
+
+        if (currentPage > IncidentReportsRequestVm.DefaultPage)
+                queryParams["page"] = currentPage;
+
+            if (currentPageSize != IncidentReportsRequestVm.DefaultPageSize)
+                queryParams["pageSize"] = currentPageSize;
+
+            var isDefaultSort = currentSortBy == IncidentReportsRequestVm.DefaultSortBy 
+                && currentSortDescending == IncidentReportsRequestVm.DefaultSortDescending;
+    
+            if (!isDefaultSort && !string.IsNullOrEmpty(currentSortBy))
+            {
+                queryParams["sortBy"] = currentSortBy;
+                if (currentSortDescending)
+                    queryParams["sortDesc"] = true;
+            }
+
+                var uri = NavigationManager.GetUriWithQueryParameters("/dashboard", queryParams);
+                NavigationManager.NavigateTo(uri, replace: true);
+        }
 
     private async Task HandleFilterInputKeyDown(KeyboardEventArgs args)
     {
@@ -93,12 +215,14 @@
 
     private async Task Reload()
     {
+        UpdateQueryParameters();
         await grid.ReloadServerData();
     }
 
     private async Task ClearFilters()
     {
         request.Filter = new();
+        currentPage = IncidentReportsRequestVm.DefaultPage;
         await Reload();
     }
 
@@ -107,6 +231,24 @@
         request.Page = state.Page;
         request.PageSize = state.PageSize;
         request.SortDefinitions = state.SortDefinitions;
+
+        var newSortBy = state.SortDefinitions.FirstOrDefault()?.SortBy;
+        var newSortDescending = state.SortDefinitions.FirstOrDefault()?.Descending ?? false;
+
+        var stateChanged = currentPage != state.Page 
+            || currentPageSize != state.PageSize
+            || currentSortBy != newSortBy
+            || currentSortDescending != newSortDescending;
+
+        currentPage = state.Page;
+        currentPageSize = state.PageSize;
+        currentSortBy = newSortBy;
+        currentSortDescending = newSortDescending;
+
+        if (stateChanged)
+        {
+            UpdateQueryParameters();
+        }
 
         IncidentReportsGridVm? result = null;
         var gridData = new GridData<IncidentReportsGridItem>();
