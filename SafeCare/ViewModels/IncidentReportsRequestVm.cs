@@ -5,7 +5,7 @@ namespace SafeCare.ViewModels
     public class IncidentReportsRequestVm
     {
         public const int DefaultPage = 0;
-        public const int DefaultPageSize = 10;
+        public const int DefaultPageSize = 25;
         public const string DefaultSortBy = nameof(IncidentReportsGridItem.Id);
         public const bool DefaultSortDescending = true;
 

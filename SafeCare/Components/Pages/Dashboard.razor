@@ -30,7 +30,7 @@
         </MudSelect>
         <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" OnClick="ClearFilters" title="Wyczyść filtry" />
     </MudGrid>
-    <MudDataGrid T="IncidentReportsGridItem" ServerData="LoadData" Height="calc(100vh - 200px)" FixedHeader Striped Bordered Dense SortMode="SortMode.Single" Elevation="4" ShowColumnOptions="false" @ref="grid" CurrentPage="currentPage" RowsPerPage="currentPageSize" SortDefinitions="gridSortDefinitions">
+    <MudDataGrid T="IncidentReportsGridItem" ServerData="LoadData" Height="calc(100vh - 200px)" FixedHeader Striped Bordered Dense SortMode="SortMode.Single" Elevation="4" ShowColumnOptions="false" @ref="grid" CurrentPage="currentPage" RowsPerPage="currentPageSize" SortDefinitions="gridSortDefinitions" RowClick="HandleRowClick" Hover>
         <Columns>
             <PropertyColumn Property="x => x.Id" Title="Lp." StickyLeft HeaderStyle="width: 80px;" />
             <PropertyColumn Property="x => x.FullName" Title="Zgłaszający" HeaderStyle="width: 200px;" />
@@ -117,6 +117,19 @@
     {
         await base.OnInitializedAsync();
         MainLayout.SetPath("/dashboard");
+    }
+
+    private void HandleRowClick(DataGridRowClickEventArgs<IncidentReportsGridItem> args)
+    {
+        if(args.MouseEventArgs.Detail > 1)
+        {
+            ShowDetails(args.Item.Id);
+        }
+    }
+
+    private void ShowDetails(int id)
+    {
+        NavigationManager.NavigateTo($"/details/{id}");
     }
 
     private void InitializeFiltersFromQuery()

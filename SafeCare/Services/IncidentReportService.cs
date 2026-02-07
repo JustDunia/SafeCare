@@ -13,6 +13,7 @@ namespace SafeCare.Services
     {
         Task<int> CreateReport(IncidentReportDto incidentReportDto, CancellationToken token = default);
         Task<IncidentReportsGridVm> GetReports(IncidentReportsRequestVm request, CancellationToken token = default);
+        Task<IncidentReportDetails> GetReportDetails(int id, CancellationToken token = default);
     }
 
     public class IncidentReportService(IDbContextFactory<AppDbContext> dbContextFactory) : IIncidentReportService
@@ -62,6 +63,51 @@ namespace SafeCare.Services
             await dbContext.SaveChangesAsync(token);
 
             return incidentReport.Id;
+        }
+
+        public async Task<IncidentReportDetails> GetReportDetails(int id, CancellationToken token = default)
+        {
+            using var dbContext = _dbContextFactory.CreateDbContext();
+
+            var report = await dbContext.IncidentReports
+                .Include(x => x.Department)
+                .Include(x => x.IncidentDefinitions)
+                .FirstOrDefaultAsync(x => x.Id == id, token)
+                ?? throw new DomainException($"Entity of type {nameof(IncidentReport)} with Id {id} not found");
+
+            var model = new IncidentReportDetails
+            {
+                CreatedAt = report.CreatedAt,
+                Name = report.Name,
+                Surname = report.Surname,
+                Phone = report.Phone,
+                Email = report.Email,
+                PatientName = report.PatientName,
+                PatientSurname = report.PatientSurname,
+                PatientDob = report.PatientDob,
+                PatientGender = report.PatientGender.GetDisplayName(),
+                DateFrom = report.DateFrom,
+                DateTo = report.DateTo,
+                Date = report.Date,
+                Department = report.Department.Name,
+                Incidents = report.IncidentDefinitions.Select(i => new IncidentReportDetailsItem
+                {
+                    Category = i.Category.GetDisplayName(),
+                    Name = i.Name
+                }).ToList(),
+                Description = report.IncidentDescription
+            };
+
+            if (!string.IsNullOrEmpty(report.OtherIncidentDefinition))
+            {
+                model.Incidents.Add(new IncidentReportDetailsItem
+                {
+                    Category = IncidentCategory.Other.GetDisplayName(),
+                    Name = report.OtherIncidentDefinition
+                });
+            }
+
+            return model;
         }
 
         public async Task<IncidentReportsGridVm> GetReports(IncidentReportsRequestVm request, CancellationToken token = default)

@@ -1,10 +1,170 @@
 ﻿@page "/details/{Id:int}"
 @using Microsoft.AspNetCore.Authorization
+@using SafeCare.Enums
+@using SafeCare.Services
+@using SafeCare.Utils;
+@using SafeCare.ViewModels
+@using Serilog
 @attribute [Authorize]
+@inject IIncidentReportService IncidentReportService
+@inject ISnackbar Snackbar
 
-<p>@Id</p>
+<MudStack Class="mt-4 gap-5">
+    <MudItem>
+        <MudText Typo="Typo.h4">Zgłoszenie #@Id</MudText>
+        <MudText Typo="Typo.subtitle1">Data zgłoszenia: @model.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+    </MudItem>
+    <MudGrid>
+        <MudItem xs="4">
+            <MudCard Style="height:100%">
+                <MudCardHeader Class="gray lighten-5 gap-4">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" />
+                    <MudText>Dane osoby zgłaszającej</MudText>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.button">Imię</MudText>
+                            <MudText Typo="Typo.body2">@model.Name</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.button">Nazwisko</MudText>
+                            <MudText Typo="Typo.body2">@model.Surname</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.button">Nr telefonu</MudText>
+                            <MudText Typo="Typo.body2">@model.Phone</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.button">Adres e-mail</MudText>
+                            <MudText Typo="Typo.body2">@model.Email</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="4">
+            <MudCard Style="height:100%">
+                <MudCardHeader Class="gray lighten-5 gap-4">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonalInjury" Color="Color.Primary" />
+                    <MudText>Dane pacjenta</MudText>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.button">Imię</MudText>
+                            <MudText Typo="Typo.body2">@model.PatientName</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.button">Nazwisko</MudText>
+                            <MudText Typo="Typo.body2">@model.PatientSurname</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.button">Płeć</MudText>
+                            <MudText Typo="Typo.body2">@model.PatientGender</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.button">Data urodzenia</MudText>
+                            <MudText Typo="Typo.body2">@model.PatientDob?.ToString("dd.MM.yyyy")</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="4">
+            <MudCard Style="height:100%">
+                <MudCardHeader Class="gray lighten-5 gap-4">
+                    <MudIcon Icon="@Icons.Material.Filled.DateRange" Color="Color.Primary" />
+                    <MudText>Czas i miejsce zdarzenia</MudText>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.button">Czas zdarzenia</MudText>
+                            <MudText Typo="Typo.body2">@incidentDate</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.button">Jednostka szpitala</MudText>
+                            <MudText Typo="Typo.body2">@model.Department</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="6">
+            <MudCard Style="height:100%">
+                <MudCardHeader Class="gray lighten-5 gap-4">
+                    <MudIcon Icon="@Icons.Material.Filled.ContentPaste" Color="Color.Primary" />
+                    <MudText>Kategorie zdarzenia</MudText>
+                </MudCardHeader>
+                <MudCardContent>
+                    @foreach (var incident in incidents)
+                    {
+                        <div class="mb-3">
+                            <MudText Typo="Typo.button">@incident.Key</MudText>
+                            <MudItem Class="ps-5">
+                                @foreach (var item in incident.Value)
+                                {
+                                    <MudStack Row AlignItems="AlignItems.Center">
+                                        <MudItem>
+                                            <MudIcon Icon="@Icons.Material.Filled.ArrowRightAlt" />
+                                        </MudItem>
+                                        <MudText Typo="Typo.body2">@item</MudText>
+                                    </MudStack>
+                                }
+                            </MudItem>
+                        </div>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="6">
+            <MudCard Style="height:100%">
+                <MudCardHeader Class="gray lighten-5 gap-4">
+                    <MudIcon Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" />
+                    <MudText>Opis zdarzenia</MudText>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body2">@model.Description</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+
+</MudStack>
 
 @code {
     [Parameter]
     public int Id { get; set; }
+
+    private IncidentReportDetails model = new();
+    private string incidentDate = string.Empty;
+    private Dictionary<string, List<string>> incidents = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        try
+        {
+            model = await IncidentReportService.GetReportDetails(Id);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Error fetching incident report details: {ex.Message}");
+            Snackbar.Add("Nie można pobrać szczegółów zgłoszenia. Spróbuj ponownie później.", Severity.Error);
+            return;
+        }
+
+        incidentDate = model.Date.HasValue
+            ? model.Date.Value.ToString("dd.MM.yyyy HH:mm")
+            : model.DateFrom.HasValue && model.DateTo.HasValue
+                ? $"{model.DateFrom.Value.ToString("dd.MM.yyyy")} - {model.DateTo.Value.ToString("dd.MM.yyyy")}"
+                : string.Empty;
+
+        incidents = model.Incidents
+            .GroupBy(i => i.Category)
+            .ToDictionary(g => g.Key, g => g.Select(i => i.Name).ToList());
+    }
 }
