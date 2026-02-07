@@ -1,16 +1,94 @@
 ﻿@using Microsoft.AspNetCore.Authorization
+@using SafeCare.Enums
+@using SafeCare.Services
+@using SafeCare.ViewModels
+@using System.Threading.Tasks
+@using Serilog
+@using SafeCare.Utils;
+@inject IIncidentReportService IncidentReportService
+@inject ISnackbar Snackbar
 
 @page "/dashboard"
 @attribute [Authorize]
 
-<h3>Dashboard</h3>
+<MudDataGrid Items="@data" Class="mt-4" AllowUnsorted="false" Bordered Dense DragDropColumnReordering SortMode="SortMode.None" Elevation="4">
+    <Columns>
+        <PropertyColumn Property="x => x.FullName" Title="Zgłaszający" />
+        <PropertyColumn Property="x => x.PatientFullName" Title="Pacjent" />
+        <PropertyColumn Property="x => x.PatientAge" Title="Wiek" />
+        <PropertyColumn Property="x => x.PatientGender" Title="Płeć" />
+        <TemplateColumn Title="Data zdarzenia">
+            <CellTemplate>
+                @if (context.Item.Date.HasValue)
+                {
+                    @context.Item.Date.Value.ToString("dd.MM.yyyy HH:mm")
+                }
+                else if (context.Item.DateFrom.HasValue && context.Item.DateTo.HasValue)
+                {
+                    <p>@context.Item.DateFrom.Value.ToString("dd.MM.yyyy")</p>
+                    <span> - </span>
+                    <p>@context.Item.DateTo.Value.ToString("dd.MM.yyyy")</p>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.Department" Title="Oddział" />
+        <TemplateColumn Title="Kategorie">
+            <CellTemplate>
+                @foreach (var item in context.Item.Categories)
+                {
+                    <MudChip Color="GetChipColor(item)">@GetChipLabel(item)</MudChip>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager RowsPerPageString="Ilość wierszy na stronę" InfoFormat="{first_item}-{last_item} z {all_items}" />
+    </PagerContent>
+</MudDataGrid>
 
 @code {
     [CascadingParameter]
     private MainLayout MainLayout { get; set; } = default!;
 
-    protected override void OnInitialized()
+    private List<IncidentReportsGridVm> data = [];
+
+    protected override async Task OnInitializedAsync()
     {
+        await base.OnInitializedAsync();
         MainLayout.SetPath("/dashboard");
+
+        try
+        {
+            data = await IncidentReportService.GetReports(new IncidentReportsRequestVm());
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Pobieranie danych nie powiodło się. Spróbuj ponownie później.", Severity.Error);
+            Log.Error(ex, $"Error fetching incident reports: {ex.Message}");
+        }
+    }
+
+    private Color GetChipColor(IncidentCategory category)
+    {
+        return category switch
+        {
+            IncidentCategory.Clinical => Color.Info,
+            IncidentCategory.Pharmacotherapy => Color.Warning,
+            IncidentCategory.Transfusion => Color.Error,
+            IncidentCategory.Operational => Color.Secondary,
+            _ => Color.Surface
+        };
+    }
+
+    private string GetChipLabel(IncidentCategory category)
+    {
+        return category switch
+        {
+            IncidentCategory.Clinical => "Kliniczne",
+            IncidentCategory.Pharmacotherapy => "Farmakoterapia",
+            IncidentCategory.Transfusion => "Transfuzje",
+            IncidentCategory.Operational => "Sprzęt/organizacja",
+            _ => "Inne"
+        };
     }
 }

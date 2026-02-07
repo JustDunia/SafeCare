@@ -92,7 +92,7 @@ namespace SafeCare.Data.Entities
                     throw new DomainException("Data początkowa nie może być późniejsza niż data końcowa.");
                 }
 
-                if (dateFrom > DateTime.UtcNow.Date || dateTo > DateTime.UtcNow.Date)
+                if (dateFrom > DateTime.Now.Date || dateTo > DateTime.Now.Date)
                 {
                     throw new DomainException("Zakres dat nie może być w przyszłości.");
                 }
