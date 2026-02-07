@@ -14,6 +14,8 @@ namespace SafeCare.Services
         Task<int> CreateReport(IncidentReportDto incidentReportDto, CancellationToken token = default);
         Task<IncidentReportsGridVm> GetReports(IncidentReportsRequestVm request, CancellationToken token = default);
         Task<IncidentReportDetails> GetReportDetails(int id, CancellationToken token = default);
+        Task UpdateStatus(int id, ReportStatus status, CancellationToken token = default);
+        Task DeleteReport(int id, CancellationToken token = default);
     }
 
     public class IncidentReportService(IDbContextFactory<AppDbContext> dbContextFactory) : IIncidentReportService
@@ -65,6 +67,17 @@ namespace SafeCare.Services
             return incidentReport.Id;
         }
 
+        public async Task DeleteReport(int id, CancellationToken token = default)
+        {
+            using var dbContext = _dbContextFactory.CreateDbContext();
+
+            var report = await dbContext.IncidentReports.FindAsync([id], cancellationToken: token)
+                ?? throw new DomainException($"Entity of type {nameof(IncidentReport)} with Id {id} not found");
+
+            dbContext.Remove(report);
+            await dbContext.SaveChangesAsync();
+        }
+
         public async Task<IncidentReportDetails> GetReportDetails(int id, CancellationToken token = default)
         {
             using var dbContext = _dbContextFactory.CreateDbContext();
@@ -95,7 +108,8 @@ namespace SafeCare.Services
                     Category = i.Category.GetDisplayName(),
                     Name = i.Name
                 }).ToList(),
-                Description = report.IncidentDescription
+                Description = report.IncidentDescription,
+                Status = report.Status
             };
 
             if (!string.IsNullOrEmpty(report.OtherIncidentDefinition))
@@ -227,6 +241,17 @@ namespace SafeCare.Services
             };
 
             return result;
+        }
+
+        public async Task UpdateStatus(int id, ReportStatus status, CancellationToken token = default)
+        {
+            using var dbContext = _dbContextFactory.CreateDbContext();
+
+            var report = await dbContext.IncidentReports.FindAsync([id], cancellationToken: token)
+                ?? throw new DomainException($"Entity of type {nameof(IncidentReport)} with Id {id} not found");
+            report.Status = status;
+
+            await dbContext.SaveChangesAsync(token);
         }
     }
 }

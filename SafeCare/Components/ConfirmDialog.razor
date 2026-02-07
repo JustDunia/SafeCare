@@ -1,0 +1,17 @@
+﻿<MudDialog Style="width: 400px">
+    <DialogContent>
+        Czy na pewno chcesz usunąć zgłoszenie?
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Nie</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Tak</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; }
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(true));
+
+    private void Cancel() => MudDialog.Cancel();
+}

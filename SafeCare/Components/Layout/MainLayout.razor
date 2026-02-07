@@ -19,7 +19,7 @@
         <MudSpacer />
         <AuthorizeView>
             <Authorized>
-                <MudMenu AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter">
+                <MudMenu AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter" >
                     <ActivatorContent>
                         <MudButton Color="Color.Inherit">
                             <MudText Class="me-3">@firstName @lastName</MudText>
@@ -27,13 +27,9 @@
                         </MudButton>
                     </ActivatorContent>
                     <ChildContent>
-                        <MudMenuItem>
-                            <ChildContent>
-                                <form method="post" action="/signout" id="logoutForm">
-                                    <MudButton Size="Size.Small" ButtonType="ButtonType.Submit">Wyloguj</MudButton>
-                                </form>
-                            </ChildContent>
-                        </MudMenuItem>
+                        <form method="post" action="/signout" id="logoutForm">
+                            <button type="submit" style="width:100%">Wyloguj</button>
+                        </form>
                     </ChildContent>
                 </MudMenu>
                 @if (currentPath == "/")

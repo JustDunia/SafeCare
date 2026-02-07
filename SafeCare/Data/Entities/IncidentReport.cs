@@ -54,7 +54,9 @@ namespace SafeCare.Data.Entities
             IncidentDefinitions = incidentDefinitions;
             OtherIncidentDefinition = otherIncidentDefinition;
             IncidentDescription = incidentDescription;
+
             CreatedAt = DateTime.Now;
+            Status = ReportStatus.New;
         }
 
         public int Id { get; set; }
@@ -75,6 +77,7 @@ namespace SafeCare.Data.Entities
         public string? OtherIncidentDefinition { get; set; }
         public required string IncidentDescription { get; set; }
         public DateTime CreatedAt { get; set; }
+        public ReportStatus Status { get; set; }
 
 
         private void ValidateDates(
@@ -163,6 +166,12 @@ namespace SafeCare.Data.Entities
 
             builder.Property(ir => ir.CreatedAt)
                 .HasColumnType("timestamp without time zone");
+
+            builder.Property(ir => ir.Status)
+                .IsRequired()
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .HasDefaultValue(ReportStatus.New);
         }
     }
 }

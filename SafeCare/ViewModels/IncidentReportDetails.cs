@@ -1,4 +1,6 @@
-﻿namespace SafeCare.ViewModels
+﻿using SafeCare.Enums;
+
+namespace SafeCare.ViewModels
 {
     public class IncidentReportDetails
     {
@@ -17,6 +19,7 @@
         public string Department { get; set; } = null!;
         public IList<IncidentReportDetailsItem> Incidents { get; set; } = [];
         public string Description { get; set; } = null!;
+        public ReportStatus Status { get; set; }
     }
 
     public class IncidentReportDetailsItem

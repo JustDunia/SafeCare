@@ -8,12 +8,30 @@
 @attribute [Authorize]
 @inject IIncidentReportService IncidentReportService
 @inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
 
 <MudStack Class="mt-4 gap-5">
-    <MudItem>
-        <MudText Typo="Typo.h4">Zgłoszenie #@Id</MudText>
-        <MudText Typo="Typo.subtitle1">Data zgłoszenia: @model.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
-    </MudItem>
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudItem>
+            <MudText Typo="Typo.h4">Zgłoszenie #@Id</MudText>
+            <MudText Typo="Typo.subtitle1">Data zgłoszenia: @model.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+        </MudItem>
+        <MudStack Row AlignItems="AlignItems.Center">
+            <MudChip T="string" Style="width:200px" Color="GetStatusColor()">@model.Status.GetDisplayName()</MudChip>
+            <MudMenu Dense Icon="@Icons.Material.Filled.MoreVert" AriaLabel="Otwórz menu" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopCenter">
+                <ChildContent>
+                    <MudMenu Dense Label="Zmień status" AnchorOrigin="Origin.TopRight">
+                        @foreach (var status in Enum.GetValues<ReportStatus>())
+                        {
+                            <MudMenuItem Label="@status.GetDisplayName()" Disabled="@(status == model.Status)" OnClick="()=>UpdateStatus(status)" />
+                        }
+                    </MudMenu>
+                    <MudMenuItem Label="Usuń" OnClick="OpenDialogAsync" />
+                </ChildContent>
+            </MudMenu>
+        </MudStack>
+    </MudStack>
     <MudGrid>
         <MudItem xs="4">
             <MudCard Style="height:100%">
@@ -152,7 +170,7 @@
         }
         catch (Exception ex)
         {
-            Log.Error($"Error fetching incident report details: {ex.Message}");
+            Log.Error(ex, $"Error fetching incident report details: {ex.Message}");
             Snackbar.Add("Nie można pobrać szczegółów zgłoszenia. Spróbuj ponownie później.", Severity.Error);
             return;
         }
@@ -166,5 +184,58 @@
         incidents = model.Incidents
             .GroupBy(i => i.Category)
             .ToDictionary(g => g.Key, g => g.Select(i => i.Name).ToList());
+    }
+
+    private Color GetStatusColor()
+    {
+        return model.Status.GetColor();
+    }
+
+    private async Task UpdateStatus(ReportStatus newStatus)
+    {
+        try
+        {
+            await IncidentReportService.UpdateStatus(Id, newStatus);
+            model.Status = newStatus;
+            Snackbar.Add("Status zgłoszenia został zaktualizowany.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, $"Error updating incident report status: {ex.Message}");
+            Snackbar.Add("Nie można zaktualizować statusu zgłoszenia. Spróbuj ponownie później.", Severity.Error);
+        }
+    }
+
+    private async Task DeleteReport()
+    {
+        try
+        {
+            await IncidentReportService.DeleteReport(Id);
+            Snackbar.Add("Zgłoszenie zostało usunięte.", Severity.Success);
+            await GoBack();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, $"Error deleting incident report: {ex.Message}");
+            Snackbar.Add("Nie można usunąć zgłoszenia. Spróbuj ponownie później.", Severity.Error);
+        }
+    }
+
+    private async Task OpenDialogAsync()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+
+        var response = await DialogService.ShowAsync<ConfirmDialog>(string.Empty, options);
+        var result = await response.Result;
+
+        if(result?.Data is true)
+        {
+            await DeleteReport();
+        };
+    }
+
+    private async Task GoBack()
+    {
+        await JSRuntime.InvokeVoidAsync("history.back");
     }
 }
