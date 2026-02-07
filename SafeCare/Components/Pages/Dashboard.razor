@@ -11,61 +11,127 @@
 @page "/dashboard"
 @attribute [Authorize]
 
-<MudDataGrid Items="@data" Class="mt-4" Height="calc(100vh - 150px)" FixedHeader Striped Bordered Dense DragDropColumnReordering SortMode="SortMode.None" Elevation="4">
-    <Columns>
-        <PropertyColumn Property="x => x.FullName" Title="Zgłaszający" />
-        <PropertyColumn Property="x => x.PatientFullName" Title="Pacjent" />
-        <PropertyColumn Property="x => x.PatientAge" Title="Wiek" />
-        <PropertyColumn Property="x => x.PatientGender" Title="Płeć" />
-        <TemplateColumn Title="Data zdarzenia">
-            <CellTemplate>
-                @if (context.Item.Date.HasValue)
-                {
-                    @context.Item.Date.Value.ToString("dd.MM.yyyy HH:mm")
-                }
-                else if (context.Item.DateFrom.HasValue && context.Item.DateTo.HasValue)
-                {
-                    <p>@context.Item.DateFrom.Value.ToString("dd.MM.yyyy")</p>
-                    <span> - </span>
-                    <p>@context.Item.DateTo.Value.ToString("dd.MM.yyyy")</p>
-                }
-            </CellTemplate>
-        </TemplateColumn>
-        <PropertyColumn Property="x => x.Department" Title="Oddział" />
-        <TemplateColumn Title="Kategorie">
-            <CellTemplate>
-                @foreach (var item in context.Item.Categories)
-                {
-                    <MudChip Color="GetChipColor(item)">@GetChipLabel(item)</MudChip>
-                }
-            </CellTemplate>
-        </TemplateColumn>
-    </Columns>
-    <PagerContent>
-        <MudDataGridPager RowsPerPageString="Ilość wierszy na stronę" InfoFormat="{first_item}-{last_item} z {all_items}" />
-    </PagerContent>
-</MudDataGrid>
+<div>
+    <MudGrid Class="pt-7 pb-4 ps-6 gap-4">
+        <MudTextField Label="Zgłaszający" @bind-Value="request.Filter.FullName" Clearable OnKeyDown="HandleFilterInputKeyDown" Immediate="true" OnClearButtonClick="Reload" Class="text-filter" />
+        <MudTextField Label="Pacjent" @bind-Value="request.Filter.PatientFullName" Clearable OnKeyDown="HandleFilterInputKeyDown" Immediate="true" OnClearButtonClick="Reload" Class="text-filter" />
+        <MudSelect @bind-Value="request.Filter.Gender" Label="Płeć" Clearable @bind-Value:after="Reload" Style="width:130px">
+            <MudSelectItem T="Gender ?" Value="Gender.Female">@Gender.Female.GetDisplayName()</MudSelectItem>
+            <MudSelectItem T="Gender ?" Value="Gender.Male">@Gender.Male.GetDisplayName()</MudSelectItem>
+            <MudSelectItem T="Gender ?" Value="Gender.NotProvided">Nie podano</MudSelectItem>
+        </MudSelect>
+        <MudTextField Label="Oddział" @bind-Value="request.Filter.Department" Clearable OnKeyDown="HandleFilterInputKeyDown" Immediate="true" OnClearButtonClick="Reload" Class="text-filter" />
+        <MudSelect T="IncidentCategory ?" @bind-Value="selectedCategory" @bind-SelectedValues="request.Filter.Categories" Label="Kategorie" Clearable MultiSelection ToStringFunc="x => x?.GetDisplayName()" @bind-SelectedValues:after="Reload" Style="width:250px">
+            @foreach (IncidentCategory? category in Enum.GetValues<IncidentCategory>())
+            {
+                <MudSelectItem T="IncidentCategory ?" Value="category">@category?.GetDisplayName()</MudSelectItem>
+            }
+        </MudSelect>
+        <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" OnClick="ClearFilters" title="Wyczyść filtry" />
+    </MudGrid>
+    <MudDataGrid T="IncidentReportsGridItem" ServerData="LoadData" Height="calc(100vh - 200px)" FixedHeader Striped Bordered Dense SortMode="SortMode.Single" Elevation="4" ShowColumnOptions="false" @ref="grid">
+        <Columns>
+            <PropertyColumn Property="x => x.Id" Title="Lp." StickyLeft HeaderStyle="width: 80px;" />
+            <PropertyColumn Property="x => x.FullName" Title="Zgłaszający" HeaderStyle="width: 200px;" />
+            <PropertyColumn Property="x => x.PatientFullName" Title="Pacjent" HeaderStyle="width: 200px;" />
+            <PropertyColumn Property="x => x.PatientAge" Title="Wiek" HeaderStyle="width: 80px;" />
+            <PropertyColumn Property="x => x.PatientGender" Title="Płeć" HeaderStyle="width: 110px;" />
+            <TemplateColumn Title="Data zdarzenia" SortBy="x => x.Date" Sortable="true" HeaderStyle="width: 170px;">
+                <CellTemplate>
+                    @if (context.Item.Date.HasValue)
+                    {
+                        @context.Item.Date.Value.ToString("dd.MM.yyyy HH:mm")
+                    }
+                    else if (context.Item.DateFrom.HasValue && context.Item.DateTo.HasValue)
+                    {
+                        <p>@context.Item.DateFrom.Value.ToString("dd.MM.yyyy")</p>
+                        <span> - </span>
+                        <p>@context.Item.DateTo.Value.ToString("dd.MM.yyyy")</p>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn Property="x => x.Department" Title="Oddział" />
+            <TemplateColumn Title="Kategorie" HeaderStyle="width: 180px;">
+                <CellTemplate>
+                    @foreach (var item in context.Item.Categories)
+                    {
+                        <MudChip Color="GetChipColor(item)">@GetChipLabel(item)</MudChip>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <PagerContent>
+            <MudDataGridPager RowsPerPageString="Ilość wierszy na stronę" InfoFormat="{first_item}-{last_item} z {all_items}" />
+        </PagerContent>
+    </MudDataGrid>
+</div>
 
 @code {
     [CascadingParameter]
     private MainLayout MainLayout { get; set; } = default!;
 
-    private List<IncidentReportsGridVm> data = [];
+    private IncidentReportsRequestVm request = new();
+    private MudDataGrid<IncidentReportsGridItem> grid = new();
+    private IncidentCategory? selectedCategory = null;
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
         MainLayout.SetPath("/dashboard");
+    }
+
+    private async Task HandleFilterInputKeyDown(KeyboardEventArgs args)
+    {
+        Console.WriteLine(args.Key);
+        if (args.Key != "Enter")
+        {
+            return;
+        }
+
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        await grid.ReloadServerData();
+    }
+
+    private async Task ClearFilters()
+    {
+        request.Filter = new();
+        await Reload();
+    }
+
+    private async Task<GridData<IncidentReportsGridItem>> LoadData(GridState<IncidentReportsGridItem> state)
+    {
+        request.Page = state.Page;
+        request.PageSize = state.PageSize;
+        request.SortDefinitions = state.SortDefinitions;
+
+        IncidentReportsGridVm? result = null;
+        var gridData = new GridData<IncidentReportsGridItem>();
 
         try
         {
-            data = await IncidentReportService.GetReports(new IncidentReportsRequestVm());
+            result = await IncidentReportService.GetReports(request);
         }
         catch (Exception ex)
         {
             Snackbar.Add("Pobieranie danych nie powiodło się. Spróbuj ponownie później.", Severity.Error);
             Log.Error(ex, $"Error fetching incident reports: {ex.Message}");
         }
+
+        if (result is null)
+        {
+            Snackbar.Add("Pobieranie danych nie powiodło się. Spróbuj ponownie później.", Severity.Warning);
+            Log.Error($"Error fetching incident reports. Result is null.");
+            return gridData;
+        }
+
+        gridData.Items = result.Items;
+        gridData.TotalItems = result.ItemTotalCount;
+
+        return gridData;
     }
 
     private Color GetChipColor(IncidentCategory category)
