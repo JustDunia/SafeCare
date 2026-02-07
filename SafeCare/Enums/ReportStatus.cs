@@ -33,6 +33,18 @@ namespace SafeCare.Enums
                     _ => Color.Default
                 };
             }
+
+            public string GetIcon()
+            {
+                return status switch
+                {
+                    ReportStatus.New => Icons.Material.Outlined.Lightbulb,
+                    ReportStatus.InProgress => Icons.Material.Filled.Autorenew,
+                    ReportStatus.Resolved => Icons.Material.Filled.Check,
+                    ReportStatus.Rejected => Icons.Material.Filled.Close,
+                    _ => string.Empty
+                };
+            }
         }
     }
 }

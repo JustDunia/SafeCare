@@ -15,5 +15,6 @@ namespace SafeCare.ViewModels
         public string Department { get; set; } = null!;
         public IncidentCategory[] Categories { get; set; } = [];
         public bool HasOtherCategory { get; set; }
+        public ReportStatus Status { get; set; }
     }
 }

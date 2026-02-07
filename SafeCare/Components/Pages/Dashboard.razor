@@ -60,6 +60,11 @@
                     }
                 </CellTemplate>
             </TemplateColumn>
+            <TemplateColumn Title="Status" HeaderStyle="width: 80px;">
+                <CellTemplate>
+                   <MudIcon Icon="@context.Item.Status.GetIcon()" Color="@context.Item.Status.GetColor()"/>
+                </CellTemplate>
+            </TemplateColumn>
         </Columns>
         <PagerContent>
             <MudDataGridPager RowsPerPageString="Ilość wierszy na stronę" InfoFormat="{first_item}-{last_item} z {all_items}" />

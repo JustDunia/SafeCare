@@ -216,7 +216,8 @@ namespace SafeCare.Services
                         .Select(y => y.Category)
                         .Distinct()
                         .ToArray(),
-                HasOtherCategory = !string.IsNullOrEmpty(x.OtherIncidentDefinition)
+                HasOtherCategory = !string.IsNullOrEmpty(x.OtherIncidentDefinition),
+                Status = x.Status
             });
 
 
