@@ -43,6 +43,16 @@ try
 
     var app = builder.Build();
 
+    // Seed database
+    using (var scope = app.Services.CreateScope())
+    {
+        Log.Information("Start DB migration.");
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await dbContext.Database.MigrateAsync();
+        await DbSeeder.SeedAsync(dbContext);
+        Log.Information("DB migration completed.");
+    }
+
     app.UseMiddleware<SecurityHeadersMiddleware>();
 
     if (!app.Environment.IsDevelopment())
