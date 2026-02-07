@@ -9,5 +9,6 @@ namespace SafeCare.ViewModels
         public Gender? Gender { get; set; }
         public string? Department { get; set; }
         public IEnumerable<IncidentCategory?> Categories { get; set; } = [];
+        public IEnumerable<ReportStatus?> Statuses { get; set; } = [];
     }
 }

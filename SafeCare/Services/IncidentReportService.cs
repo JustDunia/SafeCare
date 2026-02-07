@@ -159,6 +159,11 @@ namespace SafeCare.Services
                 mainQuery = mainQuery.Where(x => x.IncidentDefinitions.Select(i => i.Category).Any(c => request.Filter.Categories.Contains(c)));
             }
 
+            if (request.Filter.Statuses is not null && request.Filter.Statuses.Any())
+            {
+                mainQuery = mainQuery.Where(x => request.Filter.Statuses.Contains(x.Status));
+            }
+
             var totalItems = await mainQuery.CountAsync(token);
 
             IOrderedQueryable<IncidentReport> sortedQuery = mainQuery.OrderByDescending(x => x.Id);

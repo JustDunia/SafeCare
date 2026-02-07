@@ -22,10 +22,16 @@
             <MudSelectItem T="Gender ?" Value="Gender.NotProvided">Nie podano</MudSelectItem>
         </MudSelect>
         <MudTextField Label="Oddział" @bind-Value="request.Filter.Department" Clearable OnKeyDown="HandleFilterInputKeyDown" Immediate="true" OnClearButtonClick="Reload" Class="text-filter" />
-        <MudSelect T="IncidentCategory ?" @bind-Value="selectedCategory" @bind-SelectedValues="request.Filter.Categories" Label="Kategorie" Clearable MultiSelection ToStringFunc="x => x?.GetDisplayName()" @bind-SelectedValues:after="Reload" Style="width:250px">
+        <MudSelect T="IncidentCategory ?" @bind-Value="selectedCategory" @bind-SelectedValues="request.Filter.Categories" Label="Kategorie" Clearable MultiSelection ToStringFunc="x => x?.GetDisplayName()" @bind-SelectedValues:after="Reload" Style="width:200px">
             @foreach (IncidentCategory? category in Enum.GetValues<IncidentCategory>())
             {
                 <MudSelectItem T="IncidentCategory ?" Value="category">@category?.GetDisplayName()</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="ReportStatus ?" @bind-Value="selectedStatus" @bind-SelectedValues="request.Filter.Statuses" Label="Status" Clearable MultiSelection ToStringFunc="x => x?.GetDisplayName()" @bind-SelectedValues:after="Reload" Style="width:200px">
+            @foreach (ReportStatus? status in Enum.GetValues<ReportStatus>())
+            {
+                <MudSelectItem T="ReportStatus ?" Value="status">@status?.GetDisplayName()</MudSelectItem>
             }
         </MudSelect>
         <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" OnClick="ClearFilters" title="Wyczyść filtry" />
@@ -91,6 +97,9 @@
     [SupplyParameterFromQuery(Name = "categories")]
     public string? CategoriesQuery { get; set; }
 
+    [SupplyParameterFromQuery(Name = "statuses")]
+    public string? StatusesQuery { get; set; }
+
     [SupplyParameterFromQuery(Name = "page")]
     public int? PageQuery { get; set; }
 
@@ -106,6 +115,7 @@
     private IncidentReportsRequestVm request = new();
     private MudDataGrid<IncidentReportsGridItem> grid = new();
     private IncidentCategory? selectedCategory = null;
+    private ReportStatus? selectedStatus = null;
     private int currentPage = IncidentReportsRequestVm.DefaultPage;
     private int currentPageSize = IncidentReportsRequestVm.DefaultPageSize;
     private string? currentSortBy = IncidentReportsRequestVm.DefaultSortBy;
@@ -158,6 +168,16 @@
             request.Filter.Categories = categories;
         }
 
+        if (!string.IsNullOrEmpty(StatusesQuery))
+        {
+            var statusNames = StatusesQuery.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            var statuses = statusNames
+                .Select(name => Enum.TryParse<ReportStatus>(name, out var st) ? (ReportStatus?)st : null)
+                .Where(s => s.HasValue)
+                .ToList();
+            request.Filter.Statuses = statuses;
+        }
+
         currentPage = PageQuery ?? IncidentReportsRequestVm.DefaultPage;
             currentPageSize = PageSizeQuery ?? IncidentReportsRequestVm.DefaultPageSize;
 
@@ -198,6 +218,14 @@
                 .Where(c => c.HasValue)
                 .Select(c => c!.Value.ToString());
             queryParams["categories"] = string.Join(",", categoryNames);
+        }
+
+        if (request.Filter.Statuses?.Any() == true)
+        {
+            var statusNames = request.Filter.Statuses
+                .Where(c => c.HasValue)
+                .Select(c => c!.Value.ToString());
+            queryParams["statuses"] = string.Join(",", statusNames);
         }
 
         if (currentPage > IncidentReportsRequestVm.DefaultPage)
