@@ -12,7 +12,6 @@
 @inject IIncidentDefinitionService IncidentDefinitionService
 @inject IDepartmentService DepartmentService
 @inject IIncidentReportService IncidentReportService
-@inject ITimezoneService TimezoneService
 @inject ISnackbar Snackbar
 @inject IScrollManager ScrollManager
 @inject ILogger<Home> Logger
@@ -208,7 +207,7 @@
         {
             try
             {
-                var dto = await model.ToDtoAsync(TimezoneService);
+                var dto = model.ToDto();
                 var reportId = await IncidentReportService.CreateReport(dto);
                 Logger.LogInformation("Incident report submitted successfully with Id {ReportId}.", reportId);
 

@@ -99,7 +99,7 @@ namespace SafeCare.Data.Entities
             }
             else
             {
-                if (date!.Value > DateTime.UtcNow)
+                if (date!.Value > DateTime.Now)
                 {
                     throw new DomainException("Konkretna data i godzina nie może być w przyszłości.");
                 }
@@ -138,6 +138,15 @@ namespace SafeCare.Data.Entities
 
             builder.Property(ir => ir.PatientDob)
                 .HasColumnType("date");
+
+            builder.Property(ir => ir.Date)
+                .HasColumnType("timestamp without time zone");
+
+            builder.Property(ir => ir.DateFrom)
+                .HasColumnType("timestamp without time zone");
+
+            builder.Property(ir => ir.DateTo)
+                .HasColumnType("timestamp without time zone");
 
             builder.Property(ir => ir.OtherIncidentDefinition)
                 .HasMaxLength(255);

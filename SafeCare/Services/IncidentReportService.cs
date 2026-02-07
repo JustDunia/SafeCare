@@ -74,7 +74,7 @@ namespace SafeCare.Services
                 FullName = $"{x.Name} {x.Surname}",
                 PatientFullName = $"{x.PatientName} {x.PatientSurname}",
                 PatientAge = x.PatientDob.HasValue
-                    ? Math.Round((DateTime.UtcNow - x.PatientDob.Value).TotalDays / 365.25, 1)
+                    ? Math.Round((DateTime.Now - x.PatientDob.Value).TotalDays / 365.25, 1)
                     : null,
                 PatientGender = x.PatientGender != Enums.Gender.NotProvided
                     ? x.PatientGender.GetDisplayName()

@@ -1,5 +1,4 @@
 ﻿using SafeCare.Dtos;
-using SafeCare.Services;
 using SafeCare.ViewModels;
 
 namespace SafeCare.Mappings
@@ -8,39 +7,33 @@ namespace SafeCare.Mappings
     {
         extension(IncidentRegistrationFormVm vm)
         {
-            public async Task<IncidentReportDto> ToDtoAsync(ITimezoneService timezoneService)
+            public IncidentReportDto ToDto()
             {
-                var timezoneOffset = await timezoneService.GetUserTimezoneOffsetAsync();
-
-                DateTime? dateFromUtc = null;
-                DateTime? dateToUtc = null;
-                DateTime? dateUtc = null;
-                TimeOnly? time = null;
+                DateTime? dateFrom = null;
+                DateTime? dateTo = null;
+                DateTime? date = null;
 
                 if (vm.IsDatePeriod)
                 {
                     if (vm.DateFrom.HasValue)
                     {
-                        dateFromUtc = timezoneService.ConvertLocalToUtc(DateOnly.FromDateTime(vm.DateFrom.Value));
+                        dateFrom = vm.DateFrom.Value.Date;
                     }
 
                     if (vm.DateTo.HasValue)
                     {
-                        dateToUtc = timezoneService.ConvertLocalToUtc(DateOnly.FromDateTime(vm.DateTo.Value));
+                        dateTo = vm.DateTo.Value.Date;
                     }
                 }
                 else
                 {
                     if (vm.Date.HasValue && !string.IsNullOrWhiteSpace(vm.Time))
                     {
-                        time = TimeOnly.TryParse(vm.Time, out var parsedTime)
+                        var time = TimeOnly.TryParse(vm.Time, out var parsedTime)
                             ? parsedTime
                             : throw new ArgumentException("Nieprawidłowy format czasu", nameof(vm.Time));
 
-                        dateUtc = timezoneService.ConvertLocalToUtc(
-                            DateOnly.FromDateTime(vm.Date.Value),
-                            time.Value,
-                            timezoneOffset);
+                        date = vm.Date.Value.Date.Add(time.ToTimeSpan());
                     }
                 }
 
@@ -55,9 +48,9 @@ namespace SafeCare.Mappings
                     PatientDob = vm.PatientDob,
                     PatientGender = vm.PatientGender
                         ?? Enums.Gender.NotProvided,
-                    DateFrom = dateFromUtc,
-                    DateTo = dateToUtc,
-                    Date = dateUtc,
+                    DateFrom = dateFrom,
+                    DateTo = dateTo,
+                    Date = date,
                     Department = vm.Department
                         ?? throw new ArgumentNullException(nameof(IncidentReportDto.Department)),
                     SelectedIncidentDefinitions = vm.SelectedIncidentDefinitions
