@@ -11,7 +11,7 @@
 @page "/dashboard"
 @attribute [Authorize]
 
-<MudDataGrid Items="@data" Class="mt-4" AllowUnsorted="false" Bordered Dense DragDropColumnReordering SortMode="SortMode.None" Elevation="4">
+<MudDataGrid Items="@data" Class="mt-4" Height="calc(100vh - 150px)" FixedHeader Striped Bordered Dense DragDropColumnReordering SortMode="SortMode.None" Elevation="4">
     <Columns>
         <PropertyColumn Property="x => x.FullName" Title="Zgłaszający" />
         <PropertyColumn Property="x => x.PatientFullName" Title="Pacjent" />
