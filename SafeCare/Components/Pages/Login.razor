@@ -21,32 +21,34 @@
             }
             <form method="post" action="/signin">
                 <AntiforgeryToken />
-                <MudTextField @bind-Value="Model.UserName"
-                              Label="Nazwa użytkownika"
-                              Variant="Variant.Outlined"
-                              InputType="InputType.Text"
-                              Class="mb-4"
-                              ShrinkLabel
-                              MaxLength="256"
-                              autocomplete="username" />
-                <input type="hidden" name="userName" value="@HttpUtility.HtmlEncode(Model.UserName)" />
-                
-                <MudTextField @bind-Value="Model.Password"
-                              Label="Hasło"
-                              Variant="Variant.Outlined"
-                              InputType="InputType.Password"
-                              Class="mb-4"
-                              ShrinkLabel
-                              MaxLength="256"
-                              autocomplete="current-password" />
-                <input type="hidden" name="password" value="@Model.Password" />
-                
+                <MudTextField @bind-Value="userName"
+                Label="Nazwa użytkownika"
+                Variant="Variant.Outlined"
+                InputType="InputType.Text"
+                Class="mb-4"
+                ShrinkLabel
+                MaxLength="256"
+                Immediate="true"
+                autocomplete="username" />
+                <input type="hidden" name="userName" value="@HttpUtility.HtmlEncode(userName)" />
+
+                <MudTextField @bind-Value="password"
+                Label="Hasło"
+                Variant="Variant.Outlined"
+                InputType="InputType.Password"
+                Class="mb-4"
+                ShrinkLabel
+                MaxLength="256"
+                Immediate="true"
+                autocomplete="current-password" />
+                <input type="hidden" name="password" value="@password" />
+
                 <MudItem Class="d-flex justify-start">
-                    <MudCheckBox @bind-Value="Model.RememberMe" Label="Zapamiętaj mnie" Color="Color.Primary" Class="mb-4" />
+                    <MudCheckBox @bind-Value="rememberMe" Label="Zapamiętaj mnie" Color="Color.Primary" Class="mb-4" />
                 </MudItem>
-                <input type="hidden" name="rememberMe" value="@Model.RememberMe.ToString().ToLowerInvariant()" />
+                <input type="hidden" name="rememberMe" value="@rememberMe.ToString().ToLowerInvariant()" />
                 <input type="hidden" name="returnUrl" value="@HttpUtility.HtmlEncode(ReturnUrl)" />
-                
+
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
                            FullWidth="true"
@@ -60,7 +62,10 @@
 </MudContainer>
 
 @code {
-    private LoginFormVm Model { get; set; } = new();
+    private string userName = string.Empty;
+    private string password = string.Empty;
+    private bool rememberMe = false;
+
     private string? ErrorMessage { get; set; }
 
     [SupplyParameterFromQuery]
