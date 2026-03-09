@@ -40,6 +40,7 @@ try
     builder.Services.AddScoped<IIncidentDefinitionService, IncidentDefinitionService>();
     builder.Services.AddScoped<IDepartmentService, DepartmentService>();
     builder.Services.AddScoped<IIncidentReportService, IncidentReportService>();
+    builder.Services.AddEmailNotifications(builder.Configuration);
 
     var app = builder.Build();
 

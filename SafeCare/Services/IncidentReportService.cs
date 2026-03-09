@@ -2,10 +2,12 @@
 using SafeCare.Data;
 using SafeCare.Data.Entities;
 using SafeCare.Dtos;
+using SafeCare.Email;
 using SafeCare.Enums;
 using SafeCare.Exceptions;
 using SafeCare.Utils;
 using SafeCare.ViewModels;
+using Serilog;
 
 namespace SafeCare.Services
 {
@@ -18,9 +20,12 @@ namespace SafeCare.Services
         Task DeleteReport(int id, CancellationToken token = default);
     }
 
-    public class IncidentReportService(IDbContextFactory<AppDbContext> dbContextFactory) : IIncidentReportService
+    public class IncidentReportService(
+        IDbContextFactory<AppDbContext> dbContextFactory,
+        IEmailQueue emailQueue) : IIncidentReportService
     {
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory = dbContextFactory;
+        private readonly IEmailQueue _emailQueue = emailQueue;
 
         public async Task<int> CreateReport(IncidentReportDto incidentReportDto, CancellationToken token = default)
         {
@@ -63,6 +68,25 @@ namespace SafeCare.Services
 
             await dbContext.IncidentReports.AddAsync(incidentReport, token);
             await dbContext.SaveChangesAsync(token);
+
+            // Non-blocking email notification — never propagates failure to the caller
+            try
+            {
+                var recipients = await dbContext.Users
+                    .Where(u => u.ReceiveEmailNotifications && !string.IsNullOrWhiteSpace(u.Email))
+                    .Select(u => u.Email!)
+                    .ToListAsync(token);
+
+                if (recipients.Count > 0)
+                {
+                    var emailMessage = IncidentEmailTemplate.Build(incidentReport, recipients);
+                    _emailQueue.Enqueue(emailMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to enqueue notification email for report #{ReportId}", incidentReport.Id);
+            }
 
             return incidentReport.Id;
         }

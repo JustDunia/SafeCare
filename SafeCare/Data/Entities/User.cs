@@ -8,6 +8,7 @@ namespace SafeCare.Data.Entities
     {
         public string FirstName { get; set; } = null!;
         public string LastName { get; set; } = null!;
+        public bool ReceiveEmailNotifications { get; set; } = false;
     }
 
     public class UserEntityConfiguration : IEntityTypeConfiguration<User>
@@ -19,6 +20,9 @@ namespace SafeCare.Data.Entities
 
             builder.Property(u => u.LastName)
                 .HasMaxLength(30);
+
+            builder.Property(u => u.ReceiveEmailNotifications)
+                .HasDefaultValue(false);
 
             var admin = new User
             {
@@ -32,6 +36,7 @@ namespace SafeCare.Data.Entities
                 PasswordHash = "AQAAAAIAAYagAAAAEJlVfW5MzpSxR7nZGXwG5XwJp/Zk5inQ901o2pQZ4/7ATt0KP3LqfkmXiWsnmrgWig==",
                 SecurityStamp = "18eafee5-4a09-4928-92b7-9abaf1b1cf2e",
                 ConcurrencyStamp = "90b9f3e7-5173-4433-8421-0e7867871dc3",
+                ReceiveEmailNotifications = false,
             };
 
             builder.HasData(admin);

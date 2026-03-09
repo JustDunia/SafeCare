@@ -1,0 +1,127 @@
+@page "/account"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
+@using SafeCare.Components.Layout
+@using SafeCare.Data.Entities
+@using Serilog
+@attribute [Authorize]
+@inject UserManager<User> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
+
+<PageTitle>Ustawienia konta</PageTitle>
+
+<MudStack Class="mt-4" Spacing="4" Style="max-width:500px">
+    <MudText Typo="Typo.h5">Ustawienia konta</MudText>
+
+    @if (isLoading)
+    {
+        <MudProgressLinear Indeterminate Color="Color.Primary" />
+    }
+    else
+    {
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Color="Color.Primary" Class="me-2" />
+                <MudText>Powiadomienia e-mail</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body2" Class="mb-3">
+                    Adres e-mail: <strong>@email</strong>
+                </MudText>
+                <MudSwitch T="bool"
+                           @bind-Value="receiveEmailNotifications"
+                           Color="Color.Primary"
+                           Label="Otrzymuj powiadomienia e-mail o nowych zgłoszeniach" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="SaveAsync"
+                           Disabled="isSaving">
+                    Zapisz
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+</MudStack>
+
+@code {
+    [CascadingParameter]
+    private MainLayout MainLayout { get; set; } = default!;
+
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool receiveEmailNotifications;
+    private string email = string.Empty;
+    private User? user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        MainLayout.SetPath("/account");
+        await LoadUserAsync();
+    }
+
+    private async Task LoadUserAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            user = await UserManager.GetUserAsync(authState.User);
+
+            if (user is not null)
+            {
+                email = user.Email ?? string.Empty;
+                receiveEmailNotifications = user.ReceiveEmailNotifications;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to load user account settings.");
+            Snackbar.Add("Nie udało się załadować ustawień konta.", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (user is null) 
+        {
+            return;
+        }
+
+        isSaving = true;
+
+        try
+        {
+            user.ReceiveEmailNotifications = receiveEmailNotifications;
+            var result = await UserManager.UpdateAsync(user);
+
+            if (result.Succeeded)
+            {
+                Snackbar.Add("Ustawienia zostały zapisane.", Severity.Success);
+            }
+            else
+            {
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                Log.Error("Failed to update user notification preference: {Errors}", errors);
+                Snackbar.Add("Nie udało się zapisać ustawień.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Exception while saving user account settings.");
+            Snackbar.Add("Nie udało się zapisać ustawień.", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}
