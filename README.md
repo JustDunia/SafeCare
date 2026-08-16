@@ -142,8 +142,36 @@ dotnet ef migrations add <MigrationName> --project SafeCare
 
 ### 2.6. Tests
 
-There is no test project and no CI pipeline. Verification currently means building the
-application and exercising it by hand against a local PostgreSQL instance.
+Prerequisites: Docker running (integration and E2E tests start PostgreSQL and MailPit
+containers) and a one-time install of the Playwright browsers.
+
+The full fast suite — unit and integration tests:
+
+```bash
+dotnet test SafeCare.Tests/SafeCare.Tests.csproj
+```
+
+Unit tests only, no Docker needed:
+
+```bash
+dotnet test SafeCare.Tests/SafeCare.Tests.csproj -- --filter-not-trait "Category=Integration"
+```
+
+E2E tests require the application built in the Release configuration:
+
+```bash
+dotnet build SafeCare.slnx -c Release
+```
+
+```bash
+pwsh SafeCare.E2ETests/bin/Release/net10.0/playwright.ps1 install chromium
+```
+
+```bash
+dotnet test SafeCare.E2ETests/SafeCare.E2ETests.csproj
+```
+
+Every push and pull request to `main` runs both suites in GitHub Actions.
 
 ## 3. Credentials
 

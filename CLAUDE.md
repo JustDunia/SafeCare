@@ -28,7 +28,36 @@ Dev URLs: `http://localhost:5288`, `https://localhost:7163`. Test login: `admin`
 
 Migrations are applied automatically at startup (`Database.MigrateAsync()` in [Program.cs](SafeCare/Program.cs:56)), so `dotnet ef database update` is rarely needed. Design-time EF tooling reads `appsettings.Development.json` via [AppDbContextFactory.cs](SafeCare/Data/AppDbContextFactory.cs) — that file is gitignored and must exist locally for `dotnet ef` to work.
 
-**There is no test project and no CI.** Verification means building and running the app against a local PostgreSQL (`Host=localhost;Port=5432;Database=SafeCare;Username=postgres;Password=password`) and MailPit on port 1025 for email.
+## Testing
+
+Two test projects, both xUnit v3 on Microsoft.Testing.Platform. `global.json` opts into that
+runner — without it `dotnet test` fails outright. Test projects are executables
+(`<OutputType>Exe</OutputType>`) and must NOT reference `Microsoft.NET.Test.Sdk` or
+`xunit.runner.visualstudio`; on .NET 10 those route to VSTest, which is no longer supported.
+
+- `SafeCare.Tests` — unit tests plus integration tests against a real PostgreSQL started by
+  Testcontainers. Integration tests carry `[Trait("Category", "Integration")]`.
+- `SafeCare.E2ETests` — Playwright driving the real application, with PostgreSQL and MailPit
+  in containers.
+
+```bash
+dotnet test SafeCare.Tests/SafeCare.Tests.csproj
+```
+
+Fast suite only, no Docker needed:
+
+```bash
+dotnet test SafeCare.Tests/SafeCare.Tests.csproj -- --filter-not-trait "Category=Integration"
+```
+
+E2E needs the app built in Release and browsers installed once
+(`pwsh SafeCare.E2ETests/bin/Release/net10.0/playwright.ps1 install chromium`).
+
+Integration tests use a real PostgreSQL because `GetReports` filters through
+`EF.Functions.ILike`, which no in-memory provider can translate.
+
+CI runs on GitHub Actions ([ci.yml](.github/workflows/ci.yml)): build and test in one job,
+E2E in another, plus vulnerable-package scanning, EF migration drift detection and formatting.
 
 ## Architecture
 

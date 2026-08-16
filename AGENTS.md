@@ -73,6 +73,8 @@ SafeCare/                          # Solution root
 | Change logging | `appsettings.json` Serilog section | No code change needed |
 | Seed data | `Data/SeedData.sql` | Embedded, runs only when `Departments` is empty |
 | Map VM to DTO | `Mappings/` | C# 13 `extension` syntax |
+| Add a unit or integration test | `SafeCare.Tests/` | xUnit v3; integration tests need `[Trait("Category","Integration")]` and Docker |
+| Add an E2E test | `SafeCare.E2ETests/` | Playwright; app launched from the Release publish output via `AppFixture` |
 
 ## ENCODING
 
@@ -171,8 +173,13 @@ database collates itself.
 
 ## NOTES
 
-- **No tests, no CI.** No test project and no `.github/workflows`. When adding tests, xUnit is
-  the natural choice; mock `IDbContextFactory` and `IEmailQueue`.
+- **Tests and CI.** `SafeCare.Tests` (xUnit v3 unit + Testcontainers-backed integration tests,
+  `[Trait("Category","Integration")]` on the latter) and `SafeCare.E2ETests` (Playwright against
+  a Release-published app, with PostgreSQL and MailPit in containers). `global.json` opts into
+  Microsoft.Testing.Platform — required for `dotnet test` to work at all. GitHub Actions
+  ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs build+test, E2E, a
+  vulnerable-package scan, EF migration drift detection and a formatting check on every push
+  and PR to `main`.
 - **PostgreSQL required** — dev connection string in `appsettings.json`.
 - **`appsettings.Development.json` is gitignored** and must be created locally; the design-time
   EF tooling reads it through `AppDbContextFactory`.
