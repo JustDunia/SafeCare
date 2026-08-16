@@ -1,106 +1,230 @@
-# Dokumentacja Projektowa Systemu Zgłaszania Zdarzeń Niepożądanych (SafeCare)
-Autor: Justyna Sienkiewicz (justyna.sienkiewicz.stud@pw.edu.pl)
-## 1. Wstęp i opis działania serwisu
+# SafeCare — Adverse Event Reporting System
 
-### 1.1. Cel projektu
-Celem projektu było stworzenie aplikacji internetowej „SafeCare”, służącej do elektronicznego zgłaszania zdarzeń niepożądanych w placówce medycznej. System ma na celu usprawnienie komunikacji między pacjentami/opiekunami a personelem szpitala oraz zwiększenie bezpieczeństwa pacjentów poprzez identyfikację i analizę błędów medycznych oraz organizacyjnych.
-Z punktu widzenia pacjenta istotne jest, aby formularz umożliwiający zgłoszenie zdarzeń niepożądanych był prosty, czytelny oraz dostępny na urządzeniach moblinych.
+Author: Justyna Sienkiewicz (justyna.sienkiewicz.stud@pw.edu.pl)
 
-### 1.2. Technologia
-Aplikacja została zrealizowana w oparciu o nowoczesne technologie webowe:
+> The application's entire user interface is in Polish, because it is written for a Polish
+> hospital. This documentation, the source code, identifiers and log messages are in English.
 
-- Framework: .NET 10 / Blazor Web App.
-- Model renderowania: Interactive Server Rendering (zapewniający dynamiczną reaktywność interfejsu).
-- Baza danych: PostgreSQL.
-- ORM: Entity Framework Core (podejście Code-First).
+## 1. Overview
 
-### 1.3 Bezpieczeństwo
-Aplikacja została zabezpieczona m.in. poprzez:
-- Requeset Limit: ograniczenia liczby zapytań przesyłanych do serwera z jednego adresu IP w określonej jednostce czasu. Należy jednak pamiętać, że w przypadku wybranej technologii zapytanie HTTP jest wykonywane jednorazowo podczas ładowania aplikacji, po czym wszelkie działania wykonywane są przez połączenia SignalR. Wyjątek stanowi wykonanie logowania i wylogowania, które wymaga oddzielnego zapytania HTTP w celu prawidłowego ustanowienia poświadczeń.
-- Zabezpieczenie przeciw botom wypełniającym formularz:
-  - HoneyPot: pola formularza niewidoczne dla użytkownika, ale czytelne dla botów, celowo upodobnione do typowych pól formularza (np. pole adresu)
-  - Minimalny czas wypełnienia formualrza: dla typowego użytkownika niemożliwe jest uzupełnienie formularza w ciągu kilku sekund. Jeżeli formularz zostanie wypełniony bardzo szybko, zostanie on zablokowany jako podejrzenie udziału bota.
+### 1.1. Purpose
 
-### 1.4. Funkcjonalności systemu
-System został podzielony na dwa główne moduły: moduł publiczny (dla zgłaszającego) oraz moduł administracyjny (dla personelu).
+SafeCare is a web application for reporting adverse events ("zdarzenia niepożądane") in a
+medical facility. It aims to improve communication between patients or their carers and
+hospital staff, and to increase patient safety by making medical and organisational errors
+visible, traceable and analysable.
 
-#### A. Moduł Publiczny (Dostęp bez logowania)
-Dedykowany pacjentom oraz ich opiekunom. Użytkownik nie musi zakładać konta, aby dokonać zgłoszenia. Proces ten realizowany jest poprzez wieloetapowy formularz (Wizard), który zbiera następujące dane:
+From a patient's point of view the priority is that the reporting form is simple, readable and
+usable on a mobile device. Reporting is therefore anonymous by default: every personal field is
+optional, and a report can be filed without giving any contact details at all.
 
-- Dane osoby zgłaszającej: Imię, nazwisko, kontakt.
-- Dane pacjenta: Imię, nazwisko, data urodzenia, płeć (jeśli zgłoszenie dotyczy innej osoby).
-- Czas i miejsce: Data i godzina zdarzenia (lub zakres dat od-do), oddział szpitalny (wybierany ze słownika).
-- Rodzaj zdarzenia: Kategoryzacja problemu (np. działalność kliniczna, farmakoterapia, sprzęt).
-- Możliwość wyboru wielu zdarzeń w ramach kilku kategorii i/lub dodanie innego rodzaju zdarzenia
-- Opis szczegółowy: Pole tekstowe na dokładny opis sytuacji.
+### 1.2. Technology
 
-#### B. Moduł Administracyjny (Dashboard) 
-Dostępny wyłącznie dla autoryzowanych pracowników szpitala. Po zalogowaniu użytkownik otrzymuje dostęp do:
+| Concern | Choice |
+|---|---|
+| Framework | .NET 10, Blazor Web App |
+| Render mode | Interactive Server (SignalR circuits) |
+| UI components | MudBlazor |
+| Database | PostgreSQL |
+| ORM | Entity Framework Core, code-first |
+| Validation | FluentValidation |
+| Logging | Serilog (console + rolling file) |
+| E-mail | MailKit (SMTP) or Microsoft Graph |
 
-- Listy zgłoszeń: Tabela prezentująca wszystkie zgłoszenia z możliwością ich sortowania oraz filtrowania.
-- Mechanizmu stronicowania: Pozwala na wygodne przeglądanie dużej liczby rekordów.
-- Trwałość stanu widoku: Parametry filtrowania, sortowania i numer strony są zapisywane w adresie URL (Query Strings). Dzięki temu odświeżenie strony lub przesłanie linku innemu pracownikowi nie powoduje utraty kontekstu pracy.
-- Szczegółów zgłoszenia: Widok pozwalający na analizę pełnych danych zgłoszenia, zmianę jego statusu (np. Nowe, W trakcie rozpatrywania, Zakończone, Odrzucone) lub usunięcie rekordu z bazy.
+### 1.3. Security
 
-## 2. Dane dostępowe (Login i Hasło)
-Do celów testowych i weryfikacji projektu utworzono konto administratora z następującymi poświadczeniami:
+- **Request rate limiting.** Requests from a single IP address are capped at 100 per minute.
+  Note the caveat that comes with the chosen technology: under Blazor Server the browser makes
+  one HTTP request to load the application and everything afterwards travels over a SignalR
+  connection. Sign-in and sign-out are the exceptions, since establishing credentials requires
+  a real HTTP request. Form submissions are therefore throttled separately, per circuit, at
+  5 submissions per minute.
+- **Bot protection on the public form**, in two independent layers:
+  - *Honeypot fields* — form fields hidden from human users but readable by bots, deliberately
+    made to look like ordinary fields such as an address or a second e-mail.
+  - *Minimum completion time* — a genuine user cannot complete the form within a few seconds,
+    so a submission that arrives faster than that is treated as a bot.
 
-- Login / Nazwa użytkownika: admin
-- Hasło: Admin123!
+  A submission caught by either layer fails **silently**: the bot is given no feedback that
+  would help it adapt.
+- **Open redirect protection.** The `returnUrl` carried through the login flow is accepted only
+  when it is a site-relative path.
+- **Security headers** (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy`) are added to every response.
 
-## 3. Zrzuty ekranu
-Poniżej przedstawiono kluczowe widoki aplikacji, obrazujące ścieżkę użytkownika niezalogowanego oraz panel administracyjny.
+### 1.4. Features
 
-### 3.1. Widok przed zalogowaniem (Formularz zgłoszeniowy)
+The system is split into a public module for reporters and an administrative module for staff.
+
+#### A. Public module (no sign-in)
+
+Intended for patients and their carers; no account is required. The report is filed through a
+single sectioned form which collects:
+
+- **Reporter details** — first name, surname, contact details. All optional.
+- **Patient details** — first name, surname, date of birth, gender, when the report concerns
+  somebody else.
+- **Time and place** — either an exact date and time, or a from–to date range when the reporter
+  can only place the event within a period, plus the hospital ward chosen from a dictionary.
+- **Event type** — categorised (clinical activity, pharmacotherapy, transfusion, equipment and
+  organisation). Several events across several categories may be selected, and a free-text
+  description may be given instead of, or in addition to, the dictionary entries.
+- **Narrative** — a detailed free-text description of what happened.
+
+#### B. Administrative module (sign-in required)
+
+- **Report list** — a sortable, filterable table of all reports.
+- **Paging** — for working through large numbers of records.
+- **Bookmarkable view state** — filters, sort order and page number are kept in the URL query
+  string, so refreshing the page or sending the link to a colleague preserves the current view.
+- **Report details** — the full record, with the ability to change its status (New, In progress,
+  Resolved, Rejected) or delete it.
+- **Account settings** — each staff member chooses whether to receive e-mail notifications
+  about new reports.
+- **User management** (`Admin` role only) — create staff accounts, assign the `Admin` or `User`
+  role, and delete accounts. The system refuses to delete your own account or the last
+  remaining administrator.
+
+## 2. Running the project locally
+
+### 2.1. Prerequisites
+
+- .NET 10 SDK
+- PostgreSQL reachable on `localhost:5432`
+- [MailPit](https://github.com/axllent/mailpit) for e-mail, optional — see below
+
+### 2.2. Local configuration
+
+`SafeCare/appsettings.Development.json` is deliberately excluded from version control and has
+to be created locally. It also has to exist for the `dotnet ef` design-time tooling to work:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=SafeCare;Username=postgres;Password=postgres;Include Error Detail=true"
+  }
+}
+```
+
+### 2.3. Running
+
+```bash
+dotnet run --project SafeCare
+```
+
+The application listens on `http://localhost:5288` and `https://localhost:7163`.
+
+Migrations are applied automatically on startup, and dictionary data plus roughly 200 demo
+reports are seeded on first run, so `dotnet ef database update` is normally unnecessary. A
+fresh clone needs nothing beyond a reachable PostgreSQL instance.
+
+### 2.4. E-mail in development
+
+Notification e-mail is sent to a local MailPit instance on port 1025. The application runs
+perfectly well without it — delivery failures are logged and swallowed by design — but nothing
+will be delivered. To start MailPit:
+
+```bash
+docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+```
+
+The captured messages are then readable at `http://localhost:8025`. A standalone executable is
+also available from the MailPit releases page if Docker is not convenient.
+
+Note that a notification is only produced when at least one user has switched the option on
+under *Ustawienia konta*; the seeded `admin` account has it off.
+
+### 2.5. Adding a migration
+
+```bash
+dotnet ef migrations add <MigrationName> --project SafeCare
+```
+
+### 2.6. Tests
+
+There is no test project and no CI pipeline. Verification currently means building the
+application and exercising it by hand against a local PostgreSQL instance.
+
+## 3. Credentials
+
+A seeded administrator account is created for testing and evaluation:
+
+- **Username:** `admin`
+- **Password:** `Admin123!`
+
+This is a development credential baked into the initial migration. It must be rotated before
+any real deployment.
+
+## 4. Screenshots
+
+The captions below are from the original Polish documentation and show the reporter's path and
+the administrative panel.
+
+### 4.1. Before signing in — the reporting form
 
 ![](./img/Zrzut%20ekranu%202026-02-07%20225641.png)
-Rys. 1. Ekran startowy formularza – Dane osoby zgłaszającej i pacjenta.
+Fig. 1. Opening screen — reporter and patient details.
 
 ![](./img/Zrzut%20ekranu%202026-02-07%20225655.png)
-Rys. 2. Wybór czasu, miejsca i kategorii zdarzenia.
+Fig. 2. Choosing the time, place and category of the event.
 
 ![](./img/Zrzut%20ekranu%202026-02-07%20231241.png)
-Rys. 3. Szczegółowy wybór rodzaju zdarzenia w ramach wybranych kategorii
+Fig. 3. Detailed selection of event types within the chosen categories.
 
 ![](./img/Zrzut%20ekranu%202026-02-07%20231351.png)
-Rys. 4. Finalizacja zgłoszenia – dokładny opis.
+Fig. 4. Completing the report — the detailed narrative.
 
-### 3.2. Logowanie do systemu
+### 4.2. Signing in
 
 ![](./img/Zrzut%20ekranu%202026-02-07%20225737.png)
-Rys. 5. Panel logowania dla personelu.
+Fig. 5. Staff login panel.
 
-### 3.3. Widok po zalogowaniu (Panel Administratora)
+### 4.3. After signing in — the administrative panel
+
 ![](./img/Zrzut%20ekranu%202026-02-07%20225747.png)
-Rys. 6. Dashboard – Tabela zgłoszeń z funkcją sortowania i filtrowania.
+Fig. 6. Dashboard — report table with sorting and filtering.
 
 ![](./img/Zrzut%20ekranu%202026-02-07%20225849.png)
-Rys. 7. Widok szczegółów zgłoszenia i edycja statusu.
+Fig. 7. Report details and status editing.
 
-### 3.4 Widok mobilny
-![](/img/Zrzut%20ekranu%202026-02-07%20232022.png)
-Rys. 8. Widok mobilny formularza
+### 4.4. Mobile layout
+
+![](./img/Zrzut%20ekranu%202026-02-07%20232022.png)
+Fig. 8. Mobile view of the form.
 
 ![](./img/Zrzut%20ekranu%202026-02-07%20232109.png)
-Rys. 9. Widok mobilny panelu logowania oraz panelu administratora
+Fig. 9. Mobile view of the login panel and the administrative panel.
 
-## 4. Opis struktury bazy danych i relacji
-Baza danych została zaprojektowana w oparciu o paradygmat relacyjny z wykorzystaniem Entity Framework Core. Struktura składa się z tabel systemowych (Identity) oraz tabel domenowych obsługujących logikę zgłoszeń.
+## 5. Database structure
 
-### 4.1. Tabele tożsamości (Identity)
-Aplikacja wykorzystuje standardowy mechanizm ASP.NET Core Identity do zarządzania uwierzytelnianiem.
+The schema is relational and managed by Entity Framework Core. It consists of the ASP.NET Core
+Identity tables and the domain tables that carry the reporting logic.
 
-- AspNetUsers: Przechowuje dane użytkowników (administratorów), m.in. login, skrót hasła, e-mail.
-- AspNetRoles: Przechowuje role w systemie (np. Administrator).
-- Tabele powiązane (AspNetUserRoles, AspNetUserClaims itp.) zarządzają relacjami między użytkownikami a ich uprawnieniami.
+### 5.1. Identity tables
 
-W pierwszym etapie projektu wykorzystana została jedynie tabela AspNetUsers. Nadawanie ról nie było na tym etapie konieczne, ponieważ zakładamy że istnieje podział jedynie na użytkowników zalogowanych oraz niezalogowanych.
+- **AspNetUsers** — staff accounts: username, password hash, e-mail, and the two application
+  specific columns `FirstName`/`LastName` plus the `ReceiveEmailNotifications` preference.
+- **AspNetRoles** — the roles `Admin` and `User`.
+- **AspNetUserRoles** and the remaining Identity tables link users to their permissions.
 
-### 4.2. Tabele domenowe i relacje
-Główna logika biznesowa opiera się na następujących encjach:
+Authorisation is role-based. `Admin` may manage staff accounts; `User` has access to the
+reports but not to account management. The role names are defined once, as constants in
+`Data/Entities/AppRoles.cs`, and referenced from the `[Authorize]` attributes.
 
-- IncidentReports (Zgłoszenia): Jest to główna tabela przechowująca informacje o zgłoszeniu (daty, dane osobowe, opis, status).
-- Relacja Jeden-do-Wielu z Departments: Każde zgłoszenie jest przypisane do jednego oddziału (klucz obcy DepartmentId). Jeden oddział może mieć wiele zgłoszeń.
-- Departments (Oddziały): Tabela słownikowa przechowująca listę oddziałów szpitalnych (np. Ortopedia, Pediatria). Służy do normalizacji danych i ułatwia raportowanie według jednostek organizacyjnych.
-- IncidentDefinitions (Definicje zdarzeń): Tabela słownikowa zawierająca zdefiniowane typy zdarzeń niepożądanych (np. "niewłaściwa identyfikacja pacjenta", "podanie niewłaściwej jednostki krwi").
-- IncidentDefinitionIncidentReport (Tabela łącząca): Relacja Wiele-do-Wielu łącząca IncidentReports oraz IncidentDefinitions. Jedno zgłoszenie (IncidentReport) może dotyczyć kilku różnych definicji problemów jednocześnie (np. błąd sprzętowy ORAZ błąd ludzki), a jedna definicja zdarzenia może wystąpić w wielu różnych raportach.
+### 5.2. Domain tables and relationships
+
+- **IncidentReports** — the central table holding each report: dates, personal details,
+  narrative and status.
+  - *One-to-many with Departments* — each report belongs to exactly one ward via the
+    `DepartmentId` foreign key; one ward may have many reports.
+- **Departments** — dictionary of hospital wards (Ortopedia, Pediatria, …). Normalises the data
+  and makes reporting per organisational unit straightforward.
+- **IncidentDefinitions** — dictionary of predefined adverse event types, for example
+  "niewłaściwa identyfikacja pacjenta" or "podanie niewłaściwej jednostki krwi".
+- **IncidentDefinitionIncidentReport** — the join table implementing the many-to-many
+  relationship. One report may involve several different event definitions at once (an
+  equipment failure *and* human error), and one definition may appear in many reports.
+
+Note that the `Other` category has no rows in `IncidentDefinitions`. It represents the
+free-text description a reporter can supply instead of picking from the dictionary, and is
+stored directly on the report in the `OtherIncidentDefinition` column.
