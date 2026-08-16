@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="SafeCare/SafeCare.csproj" />
+  <Project Path="SafeCare.Tests/SafeCare.Tests.csproj" />
 </Solution>
