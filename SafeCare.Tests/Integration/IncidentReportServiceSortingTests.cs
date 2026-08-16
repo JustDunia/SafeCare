@@ -1,4 +1,5 @@
 ﻿using MudBlazor;
+using SafeCare.Enums;
 using SafeCare.Services;
 using SafeCare.Tests.Integration.Infrastructure;
 using SafeCare.ViewModels;
@@ -84,6 +85,104 @@ public class IncidentReportServiceSortingTests(PostgresFixture fixture) : Integr
             SortedBy(nameof(IncidentReportsGridItem.Department), descending: false));
 
         Assert.Equal("Anestezjologia", result.Items.First().Department);
+    }
+
+    [Fact]
+    public async Task SortsByDepartmentNameDescending()
+    {
+        var zebra = await SeedDepartmentAsync("Zakład patomorfologii", "ZP");
+        var alpha = await SeedDepartmentAsync("Anestezjologia", "AN");
+        await SeedReportAsync(zebra);
+        await SeedReportAsync(alpha);
+
+        var result = await CreateSut().GetReports(
+            SortedBy(nameof(IncidentReportsGridItem.Department), descending: true));
+
+        Assert.Equal("Zakład patomorfologii", result.Items.First().Department);
+    }
+
+    [Fact]
+    public async Task SortsByPatientSurnameAscending()
+    {
+        var department = await SeedDepartmentAsync();
+        await SeedReportAsync(department, patientName: "Ewa", patientSurname: "Zielińska");
+        await SeedReportAsync(department, patientName: "Piotr", patientSurname: "Adamski");
+
+        var result = await CreateSut().GetReports(
+            SortedBy(nameof(IncidentReportsGridItem.PatientFullName), descending: false));
+
+        Assert.Equal("Piotr Adamski", result.Items.First().PatientFullName);
+    }
+
+    [Fact]
+    public async Task SortsByPatientSurnameDescending()
+    {
+        var department = await SeedDepartmentAsync();
+        await SeedReportAsync(department, patientName: "Ewa", patientSurname: "Zielińska");
+        await SeedReportAsync(department, patientName: "Piotr", patientSurname: "Adamski");
+
+        var result = await CreateSut().GetReports(
+            SortedBy(nameof(IncidentReportsGridItem.PatientFullName), descending: true));
+
+        Assert.Equal("Ewa Zielińska", result.Items.First().PatientFullName);
+    }
+
+    [Fact]
+    public async Task SortsByPatientGenderAscending()
+    {
+        // PatientGender is persisted as a string (HasConversion<string>()), so the database
+        // sorts it alphabetically by enum name — "Female" before "Male" — not by the enum's
+        // underlying numeric value. Seeded with Male first so a negated sort cannot pass by
+        // matching insertion order.
+        var department = await SeedDepartmentAsync();
+        await SeedReportAsync(department, patientName: "Marek", gender: Gender.Male);
+        await SeedReportAsync(department, patientName: "Ewa", gender: Gender.Female);
+
+        var result = await CreateSut().GetReports(
+            SortedBy(nameof(IncidentReportsGridItem.PatientGender), descending: false));
+
+        Assert.StartsWith("Ewa", result.Items.First().PatientFullName);
+    }
+
+    [Fact]
+    public async Task SortsByPatientGenderDescending()
+    {
+        var department = await SeedDepartmentAsync();
+        await SeedReportAsync(department, patientName: "Marek", gender: Gender.Male);
+        await SeedReportAsync(department, patientName: "Ewa", gender: Gender.Female);
+
+        var result = await CreateSut().GetReports(
+            SortedBy(nameof(IncidentReportsGridItem.PatientGender), descending: true));
+
+        Assert.StartsWith("Marek", result.Items.First().PatientFullName);
+    }
+
+    [Fact]
+    public async Task SortsByDateAscending()
+    {
+        // Seeded with the later date first so a negated sort cannot pass by matching
+        // insertion order.
+        var department = await SeedDepartmentAsync();
+        await SeedReportAsync(department, patientName: "Nowszy", date: DateTime.Now.AddDays(-1));
+        await SeedReportAsync(department, patientName: "Starszy", date: DateTime.Now.AddDays(-30));
+
+        var result = await CreateSut().GetReports(
+            SortedBy(nameof(IncidentReportsGridItem.Date), descending: false));
+
+        Assert.StartsWith("Starszy", result.Items.First().PatientFullName);
+    }
+
+    [Fact]
+    public async Task SortsByDateDescending()
+    {
+        var department = await SeedDepartmentAsync();
+        await SeedReportAsync(department, patientName: "Nowszy", date: DateTime.Now.AddDays(-1));
+        await SeedReportAsync(department, patientName: "Starszy", date: DateTime.Now.AddDays(-30));
+
+        var result = await CreateSut().GetReports(
+            SortedBy(nameof(IncidentReportsGridItem.Date), descending: true));
+
+        Assert.StartsWith("Nowszy", result.Items.First().PatientFullName);
     }
 
     [Fact]

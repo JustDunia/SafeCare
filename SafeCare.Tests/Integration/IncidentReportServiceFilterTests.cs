@@ -137,7 +137,11 @@ public class IncidentReportServiceFilterTests(PostgresFixture fixture) : Integra
     [Fact]
     public async Task TreatsWildcardCharactersInFilterTermsLiterally()
     {
-        // Without escaping, "100%" would match every row.
+        // Without a correctly escaped ILIKE pattern, searching "100%" can go wrong in two
+        // directions: it can match nothing at all (the escape sequence is taken literally
+        // instead of unescaping the wildcard), or it can match the wrong row (an unescaped "%"
+        // still behaves as a wildcard). Asserting the actual matched row, not just the count,
+        // catches both failure modes.
         var department = await SeedDepartmentAsync();
         await SeedReportAsync(department, name: "100%", surname: "Pewny");
         await SeedReportAsync(department, name: "Anna", surname: "Kowalska");
@@ -146,6 +150,7 @@ public class IncidentReportServiceFilterTests(PostgresFixture fixture) : Integra
             Request(new IncidentReportFilter { FullName = "100%" }));
 
         Assert.Equal(1, result.ItemTotalCount);
+        Assert.Equal("100% Pewny", result.Items.Single().FullName);
     }
 
     [Fact]

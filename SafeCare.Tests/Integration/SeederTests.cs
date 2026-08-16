@@ -46,10 +46,32 @@ public class SeederTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
     [Fact]
     public async Task CreatesRolesAndGivesTheSeededAccountItsAdminRole()
     {
+        // PostgresFixture.InitializeAsync already runs the seeder once, and ResetAsync never
+        // touches AspNetRoles or the admin's AspNetUserRoles row, so all the assertions below
+        // would already hold before the SUT ran. Tear both roles and the admin's role
+        // assignment down first so the seeder is the thing that has to recreate them.
+        await using (var setup = CreateDbContext())
+        {
+            var adminUserId = PostgresFixture.SeededAdminId;
+            var roleAssignments = await setup.UserRoles
+                .Where(ur => ur.UserId == adminUserId)
+                .ToListAsync();
+            setup.UserRoles.RemoveRange(roleAssignments);
+
+            var roles = await setup.Roles
+                .Where(r => r.Name == AppRoles.Admin || r.Name == AppRoles.User)
+                .ToListAsync();
+            setup.Roles.RemoveRange(roles);
+
+            await setup.SaveChangesAsync();
+        }
+
         var provider = IdentityServiceProvider.Build(Fixture.Options);
         using var scope = provider.CreateScope();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+
+        Assert.False(await roleManager.RoleExistsAsync(AppRoles.Admin));
 
         await IdentitySeeder.SeedRolesAndAdminAsync(roleManager, userManager);
 
