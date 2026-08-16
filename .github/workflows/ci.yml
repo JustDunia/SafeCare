@@ -61,3 +61,43 @@ jobs:
         # to analyzer-driven rules at error severity, which is clean today and still catches
         # new violations without re-litigating pre-existing drift.
         run: dotnet format SafeCare.slnx --verify-no-changes analyzers --severity error
+
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        # SafeCare.E2ETests is run with --no-build below, so it must exist beforehand.
+        run: dotnet build SafeCare.slnx -c Release
+
+      - name: Publish SafeCare app
+        # AppFixture launches the app from the Release *publish* output at
+        # SafeCare/bin/Release/net10.0/publish/SafeCare.dll, not via `dotnet run --no-build`:
+        # launchSettings.json silently overrides ASPNETCORE_ENVIRONMENT/the port even when
+        # they're set on the process, and MapStaticAssets() only serves build-output static
+        # assets when the environment is literally "Development" (500s under "Testing"
+        # otherwise). See SafeCare.E2ETests/Infrastructure/AppFixture.cs. --no-build reuses
+        # the build from the previous step.
+        run: dotnet publish SafeCare/SafeCare.csproj -c Release --no-build
+
+      - name: Install Playwright browsers
+        run: pwsh SafeCare.E2ETests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Run E2E tests
+        run: dotnet test SafeCare.E2ETests/SafeCare.E2ETests.csproj -c Release --no-build
+
+      - name: Upload Playwright traces
+        # Without these a browser failure on someone else's machine is guesswork.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: SafeCare.E2ETests/bin/Release/net10.0/playwright-traces
+          if-no-files-found: ignore
