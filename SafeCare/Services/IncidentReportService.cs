@@ -214,16 +214,23 @@ namespace SafeCare.Services
 
             IQueryable<IncidentReport> mainQuery = dbContext.IncidentReports;
 
+            // The 2-argument EF.Functions.ILike overload is translated by Npgsql with an
+            // explicit ESCAPE '' clause, which disables escape processing entirely — the
+            // backslash-escaping performed by ToContainsPattern would silently do nothing.
+            // The 3-argument overload below pins the escape character to a single backslash so
+            // that ESCAPE '\' is emitted instead, matching what ToContainsPattern assumes. This
+            // relies on PostgreSQL's standard_conforming_strings being on, which is the default
+            // and what Npgsql sets on every connection.
             if (request.Filter.FullName is not null)
             {
                 var pattern = ToContainsPattern(request.Filter.FullName);
-                mainQuery = mainQuery.Where(x => EF.Functions.ILike(x.Name + " " + x.Surname, pattern));
+                mainQuery = mainQuery.Where(x => EF.Functions.ILike(x.Name + " " + x.Surname, pattern, "\\"));
             }
 
             if (request.Filter.PatientFullName is not null)
             {
                 var pattern = ToContainsPattern(request.Filter.PatientFullName);
-                mainQuery = mainQuery.Where(x => EF.Functions.ILike(x.PatientName + " " + x.PatientSurname, pattern));
+                mainQuery = mainQuery.Where(x => EF.Functions.ILike(x.PatientName + " " + x.PatientSurname, pattern, "\\"));
             }
 
             if (request.Filter.Gender is not null)
@@ -234,7 +241,7 @@ namespace SafeCare.Services
             if (request.Filter.Department is not null)
             {
                 var pattern = ToContainsPattern(request.Filter.Department);
-                mainQuery = mainQuery.Where(x => EF.Functions.ILike(x.Department.Name, pattern));
+                mainQuery = mainQuery.Where(x => EF.Functions.ILike(x.Department.Name, pattern, "\\"));
             }
 
             if (request.Filter.Categories is not null && request.Filter.Categories.Any())
