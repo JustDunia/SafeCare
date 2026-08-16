@@ -7,8 +7,8 @@ Status: zatwierdzony do implementacji
 
 SafeCare nie ma dziś ani projektu testowego, ani pipeline'u CI. Weryfikacja polega na
 zbudowaniu aplikacji i ręcznym klikaniu po niej przy lokalnym PostgreSQL. Ten dokument
-opisuje projekt zestawu testów pokrywającego logikę domenową oraz workflow GitHub Actions,
-który uruchamia go na każdy push i pull request.
+opisuje trzy warstwy testów — jednostkową, integracyjną na prawdziwym PostgreSQL i E2E w
+przeglądarce — oraz workflow GitHub Actions, który uruchamia je na każdy push i pull request.
 
 Zakres celowo obejmuje te miejsca, w których projekt już miał defekty — sortowanie i
 filtrowanie siatki, kategoria „Inne", kodowanie plików źródłowych. Testy mają być strażnikiem
@@ -22,8 +22,11 @@ konkretnych regresji, nie ozdobą raportu pokrycia.
 | Baza w testach | Testcontainers (PostgreSQL) | Ta sama ścieżka lokalnie i w CI, pełna izolacja |
 | Asercje | wbudowany `Assert` xUnit | Bez dodatkowej zależności; FluentAssertions v8 ma licencję komercyjną |
 | Mocki | ręczne atrapy | `IEmailQueue` ma dwie metody, `ILogger<T>` pokrywa `NullLogger<T>` |
-| Liczba projektów | jeden (`SafeCare.Tests`) | Zgodne z minimalizmem repo; podział przez `Trait`, nie przez projekt |
-| Testy komponentów | poza zakresem | bUnit + MudBlazor jest kruchy i kosztowny w utrzymaniu |
+| Liczba projektów | `SafeCare.Tests` + `SafeCare.E2ETests` | E2E wymaga przeglądarek i hostowania aplikacji — osobny projekt trzyma szybki zestaw szybkim |
+| Testy komponentów | poza zakresem | bUnit + MudBlazor jest kruchy i kosztowny w utrzymaniu; ścieżki UI pokrywa E2E |
+| Testy E2E | Playwright dla .NET | C# w tej samej solucji, dostęp do encji przy weryfikacji stanu po akcji w UI |
+| Hosting w E2E | proces zewnętrzny na Kestrelu | `WebApplicationFactory` serwuje przez `TestServer` w pamięci, niedostępny dla przeglądarki |
+| Poczta w E2E | MailPit w kontenerze | Jedyne pokrycie `EmailBackgroundService` i realnej wysyłki SMTP |
 
 ### Dlaczego prawdziwy PostgreSQL, a nie provider InMemory
 
@@ -50,10 +53,22 @@ SafeCare.Tests/
     IncidentReportServiceTests/  Create, Query, Sorting, Details, Mutations
     UserManagementServiceTests.cs
     SeederTests.cs
+
+SafeCare.E2ETests/
+  SafeCare.E2ETests.csproj     ProjectReference → SafeCare (dla weryfikacji stanu w bazie)
+  Infrastructure/              AppFixture, MailPitClient, PageObjects
+  PublicFormTests.cs
+  AuthenticationTests.cs
+  AuthorizationTests.cs
+  DashboardTests.cs
+  IncidentDetailsTests.cs
 ```
 
+Oba projekty zostają dopisane do `SafeCare.slnx`, który zawiera dziś wyłącznie projekt aplikacji.
+
 Testy integracyjne noszą `[Trait("Category", "Integration")]`, więc
-`dotnet test --filter Category!=Integration` przechodzi bez Dockera.
+`dotnet test SafeCare.Tests --filter Category!=Integration` przechodzi bez Dockera. Projekt E2E
+jest osobny, żeby `dotnet test SafeCare.Tests` pozostał szybki i nie wymagał przeglądarek.
 
 ### Infrastruktura integracyjna
 
@@ -167,13 +182,95 @@ zawiedzie; odmowa usunięcia własnego konta; odmowa usunięcia ostatniego admin
 **Seedery** — `DbSeeder.SeedAsync` ładuje dane słownikowe i jest idempotentny (drugie wywołanie
 nie duplikuje); `IdentitySeeder` tworzy role i rzuca, gdy konto `admin` z migracji zniknęło.
 
+## Pokrycie — warstwa E2E
+
+### Uruchamianie aplikacji pod testem
+
+`AppFixture` (jedna instancja na cały przebieg) wykonuje kolejno:
+
+1. start kontenera PostgreSQL i kontenera MailPit,
+2. start aplikacji jako **procesu zewnętrznego** (`dotnet run` na skompilowanym wyjściu),
+   nasłuchującego na wolnym porcie pod `http://127.0.0.1:{port}`,
+3. oczekiwanie na gotowość przez odpytywanie strony głównej z limitem czasu,
+4. start Playwrighta i przeglądarki Chromium.
+
+Konfiguracja wstrzykiwana jest zmiennymi środowiskowymi:
+`ConnectionStrings__DefaultConnection`, `Email__Smtp__Host`, `Email__Smtp__Port`,
+`ASPNETCORE_URLS` oraz `ASPNETCORE_ENVIRONMENT=Testing`.
+
+Ostatnia zmienna pełni funkcję zabezpieczenia: środowisko `Testing` nie ładuje
+`appsettings.Development.json`, więc test nie ma jak trafić w deweloperską bazę danych.
+Zmienne środowiskowe i tak mają pierwszeństwo przed plikami JSON, ale ta ochrona jest
+warstwowa celowo — pomyłka tutaj oznacza skasowanie cudzych danych roboczych.
+
+Aplikacja startuje wyłącznie na adresie HTTP. `UseHttpsRedirection` nie mając skąd odczytać
+portu HTTPS pomija przekierowanie i tylko loguje ostrzeżenie, więc testy nie potrzebują
+certyfikatu deweloperskiego. Środowisko inne niż `Development` włącza natomiast
+`UseExceptionHandler` — to zamierzone, bo E2E ma widzieć aplikację taką, jaka trafia do
+użytkownika.
+
+Migracje, dane słownikowe i konto `admin` powstają same przy starcie aplikacji, bo `Program.cs`
+robi to przed obsłużeniem pierwszego żądania. Testy nie potrzebują własnego zasiewu.
+
+Selektory oparte są o obiekty stron (Page Objects), a nie o klasy CSS MudBlazora, które zmieniają
+się między wersjami biblioteki.
+
+### Ograniczenie: minimalny czas wypełnienia formularza
+
+`BotDetectionService` odrzuca zgłoszenia wysłane szybciej niż 5 sekund po załadowaniu
+formularza. Każdy test E2E przechodzący przez wysyłkę musi ten próg przeczekać, co jest
+nieusuwalnym kosztem — próg jest funkcją bezpieczeństwa, nie usterką. Testy odczekują jawnie
+i z komentarzem, żeby nikt nie „zoptymalizował" tego później w ciemno.
+
+### Scenariusze
+
+**Formularz publiczny** — wypełnienie wszystkich sekcji i wysłanie zgłoszenia, potwierdzenie
+komunikatem w UI, a następnie weryfikacja w bazie, że zapisany rekord ma właściwy oddział,
+rodzaje zdarzeń i opis. Osobno: zgłoszenie anonimowe, czyli z pustymi danymi zgłaszającego i
+pacjenta, przechodzi — anonimowość jest zamierzona i test ma to utrwalić. Dalej: komunikaty
+walidacyjne po polsku dla pustego opisu i braku oddziału, gałąź okresu (data od–do) obok gałęzi
+pojedynczej daty z godziną, oraz wysyłka szybsza niż 5 sekund, która **kończy się cicho** —
+bez komunikatu dla użytkownika, zgodnie z projektem obrony przed botami.
+
+**Powiadomienie e-mail** — po wysłaniu zgłoszenia test odpytuje API MailPit i sprawdza, że
+wiadomość dotarła, ma numer zgłoszenia w temacie, a odbiorcy są w BCC, nie w polu Do. Pokrywa
+`EmailBackgroundService`, dziś nietestowany nigdzie indziej.
+
+**Logowanie** — poprawne dane prowadzą na `/dashboard`; błędne wracają na `/login` z
+komunikatem z parametru `?error=`; wylogowanie odcina dostęp do stron chronionych.
+
+**Autoryzacja** — użytkownik anonimowy wchodzący na `/dashboard` ląduje na `/login` z
+`returnUrl`, a po zalogowaniu trafia **z powrotem na stronę, o którą prosił**. Ten test celuje
+w udokumentowaną ostrą krawędź: `/signin` przyjmuje wyłącznie ścieżki zaczynające się od `/`,
+a `ToBaseRelativePath` zwraca ścieżkę bez wiodącego ukośnika, więc pomyłka w
+`RedirectUnauthorized` po cichu gubi każdy `returnUrl`. Drugi przypadek: zalogowany użytkownik
+bez roli `Admin` wchodzący na `/admin/users` jest przekierowany na `/dashboard`, a nie na ekran
+logowania.
+
+**Dashboard** — filtrowanie i sortowanie zawężają siatkę, a stan filtrów wraca w adresie URL:
+otwarcie tego adresu na nowo odtwarza ten sam widok. To sprawdza wymóg zakładkowalności
+wprost. Do tego stronicowanie.
+
+**Szczegóły zgłoszenia** — wejście z siatki w `/details/{id}` pokazuje dane zgodne z wierszem,
+a zmiana statusu utrwala się po odświeżeniu strony.
+
 ## Pipeline CI
 
-Plik `.github/workflows/ci.yml`, wyzwalany na `push` i `pull_request` do `main`, jeden job na
+Plik `.github/workflows/ci.yml`, wyzwalany na `push` i `pull_request` do `main`, na
 `ubuntu-latest` (runner ma Dockera, więc Testcontainers działa bez dodatkowej konfiguracji).
+Dwa joby, uruchamiane równolegle:
 
-Kroki: checkout → `setup-dotnet` (10.0.x) → `restore` → `build -c Release --no-restore` →
-`test -c Release --no-build` → skan podatności → weryfikacja migracji → kontrola formatowania.
+**Job `build-test`** — checkout → `setup-dotnet` (10.0.x) → `restore` →
+`build -c Release --no-restore` → `test SafeCare.Tests -c Release --no-build` → skan podatności
+→ weryfikacja migracji → kontrola formatowania.
+
+**Job `e2e`** — checkout → `setup-dotnet` → `build -c Release` → instalacja przeglądarek
+Playwrighta (`playwright.ps1 install --with-deps chromium`) → `test SafeCare.E2ETests`. W razie
+niepowodzenia publikuje ślady Playwrighta jako artefakt przebiegu — bez nich diagnoza padniętego
+testu przeglądarkowego na cudzej maszynie jest zgadywanką.
+
+Podział na dwa joby jest celowy: testy E2E są z natury wolniejsze i bardziej podatne na
+chwiejność, a rozdzielone nie przesłaniają wyniku szybkiego zestawu.
 
 **Skan podatności.** `dotnet list package --vulnerable --include-transitive` kończy się kodem 0
 nawet gdy coś znajdzie, więc krok musi analizować wyjście i sam wymusić niepowodzenie. Projekt
@@ -193,13 +290,13 @@ bramki (np. do białych znaków) należy wtedy do właściciela repozytorium.
 ## Poza zakresem
 
 - Testy komponentów Blazor (bUnit) — uzasadnienie w tabeli decyzji.
-- Testy end-to-end w przeglądarce.
-- Testy wysyłki e-mail przez prawdziwy SMTP (`MailKitEmailService`, `GraphEmailService`) —
-  wymagałyby atrapy serwera pocztowego; pokryty jest szablon i kolejkowanie.
+- E2E w przeglądarkach innych niż Chromium oraz testy responsywności.
+- `GraphEmailService` — ścieżka Microsoft Graph wymagałaby atrapy OAuth2; pokryta jest ścieżka
+  SMTP, która jest domyślną konfiguracją aplikacji.
 - Bramka pokrycia kodu (`coverlet` z progiem) — możliwa do dodania później.
 
 ## Dokumentacja do aktualizacji
 
 `CLAUDE.md`, `AGENTS.md` i `README.md` stwierdzają dziś, że projekt nie ma testów ani CI.
-Wszystkie trzy wymagają korekty wraz z opisem sposobu uruchamiania testów i wymagania Dockera
-dla warstwy integracyjnej.
+Wszystkie trzy wymagają korekty: sposób uruchamiania obu zestawów, wymaganie Dockera dla
+warstwy integracyjnej i E2E oraz jednorazowa instalacja przeglądarek Playwrighta.
