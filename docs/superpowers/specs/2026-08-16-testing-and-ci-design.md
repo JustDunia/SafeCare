@@ -44,7 +44,7 @@ SafeCare.Tests/
   Unit/
     Validators/                IncidentRegistrationFormValidatorTests, AdminUserCreateValidatorTests
     Services/                  BotDetectionServiceTests, RateLimitServiceTests
-    Mappings/                  IncidentReportMappingTests, AdminUserMappingTests, ...
+    Mappings/                  IncidentReportMappingTests
     Email/                     IncidentEmailTemplateTests
     Enums/                     EnumDisplayTests
     SourceEncodingTests.cs
@@ -67,8 +67,26 @@ SafeCare.E2ETests/
 Oba projekty zostają dopisane do `SafeCare.slnx`, który zawiera dziś wyłącznie projekt aplikacji.
 
 Testy integracyjne noszą `[Trait("Category", "Integration")]`, więc
-`dotnet test SafeCare.Tests --filter Category!=Integration` przechodzi bez Dockera. Projekt E2E
-jest osobny, żeby `dotnet test SafeCare.Tests` pozostał szybki i nie wymagał przeglądarek.
+`dotnet test SafeCare.Tests -- --filter-not-trait "Category=Integration"` przechodzi bez
+Dockera. Projekt E2E jest osobny, żeby `dotnet test SafeCare.Tests` pozostał szybki i nie
+wymagał przeglądarek.
+
+### Toolchain — ustalenia zweryfikowane doświadczalnie
+
+xUnit v3 na .NET 10 SDK działa inaczej niż v2 i inaczej niż opisuje większość materiałów.
+Poniższe punkty zostały sprawdzone na działającym projekcie próbnym, nie założone:
+
+- **VSTest jest martwy.** Na SDK 10 i nowszym `Microsoft.Testing.Platform` odmawia pracy przez
+  target VSTest. Projekt testowy **nie** referencuje `Microsoft.NET.Test.Sdk` ani
+  `xunit.runner.visualstudio` — obecność tych pakietów kieruje `dotnet test` w martwą ścieżkę.
+- **Wymagany opt-in w `global.json`** w katalogu głównym repozytorium:
+  `{ "test": { "runner": "Microsoft.Testing.Platform" } }`. Bez tego `dotnet test` kończy się
+  błędem niezależnie od zawartości projektu. Wariant z plikiem `dotnet.config` nie jest tu
+  honorowany. Sekcja `sdk` celowo pominięta — opt-in działa zarówno na SDK 10, jak i 11.
+- **Projekt testowy jest aplikacją:** `<OutputType>Exe</OutputType>`.
+- **`IAsyncLifetime` w v3 zwraca `ValueTask`**, nie `Task`.
+- **Filtrowanie po cechach** ma składnię `-- --filter-trait "Klucz=Wartość"` oraz
+  `--filter-not-trait`; wyrażenia VSTest w rodzaju `--filter "Category!=Integration"` nie działają.
 
 ### Infrastruktura integracyjna
 
@@ -129,7 +147,17 @@ prowadzą niezależne liczniki.
 zeruje `Date`, a gałąź pojedynczej daty składa `Date` z `Time` i zeruje `DateFrom`/`DateTo`;
 niepoprawny format czasu rzuca `ArgumentException`; brak oddziału lub opisu rzuca
 `ArgumentNullException`; `PatientGender == null` mapuje się na `Gender.NotProvided`.
-Analogicznie pozostałe mapowania.
+
+Pozostałe mapowania (`DepartmentMapping`, `IncidentDefinitionMapping`, `AdminUserMapping`)
+zostają bez pokrycia świadomie: przepisują pola jeden do jednego, więc test powtarzałby
+inicjalizator obiektu i wymagał aktualizacji przy każdym nowym polu, nie wykrywając niczego.
+
+**`IncidentReport` — walidacja w konstruktorze.** Encja sama pilnuje reguły „dokładna data albo
+kompletny zakres, nigdy w przyszłości" i rzuca `DomainException`. To czysta logika domenowa bez
+I/O, więc testowana jest jednostkowo: brak obu wariantów daty, zakres odwrócony, zakres w
+przyszłości, konkretna data w przyszłości oraz normalizacja `DateFrom`/`DateTo` do samej daty.
+Reguła ta dubluje się częściowo z walidatorem formularza, ale broni też ścieżek pomijających
+UI — dlatego ma własne pokrycie.
 
 **`IncidentEmailTemplate.Build`** — odbiorcy trafiają do BCC, temat zawiera numer zgłoszenia,
 treść zawiera oddział i opis, a wartości pochodzące od użytkownika są zakodowane HTML-owo
