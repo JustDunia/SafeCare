@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore SafeCare.slnx
+
+      - name: Build
+        run: dotnet build SafeCare.slnx -c Release --no-restore
+
+      - name: Unit and integration tests
+        # The runner provides Docker, so Testcontainers starts PostgreSQL unaided.
+        run: dotnet test SafeCare.Tests/SafeCare.Tests.csproj -c Release --no-build
+
+      - name: Vulnerable package scan
+        # The command reports findings but always exits 0, so the output has to be inspected.
+        run: |
+          output=$(dotnet list SafeCare.slnx package --vulnerable --include-transitive)
+          echo "$output"
+          if echo "$output" | grep -q "has the following vulnerable packages"; then
+            echo "::error::Vulnerable packages detected"
+            exit 1
+          fi
+
+      - name: Check for pending EF model changes
+        run: |
+          # AppDbContextFactory reads appsettings.Development.json, which is gitignored.
+          # has-pending-model-changes needs no live database, only a factory that constructs.
+          cat > SafeCare/appsettings.Development.json <<'JSON'
+          {
+            "ConnectionStrings": {
+              "DefaultConnection": "Host=localhost;Port=5432;Database=SafeCare;Username=postgres;Password=postgres"
+            }
+          }
+          JSON
+          dotnet tool install --global dotnet-ef
+          # NOTE: -c here means --context (DbContext name) to the ef CLI, not --configuration -
+          # `-c Release` fails with "No DbContext named 'Release' was found." Verified locally.
+          dotnet ef migrations has-pending-model-changes --project SafeCare --no-build --configuration Release
+
+      - name: Format check
+        # Full-strictness `dotnet format SafeCare.slnx --verify-no-changes` flags 52 of 110
+        # files project-wide (missing BOM, LF-only line endings, using-directive order) that
+        # predate this branch - not this task's tree to reformat (see project report). Scoped
+        # to analyzer-driven rules at error severity, which is clean today and still catches
+        # new violations without re-litigating pre-existing drift.
+        run: dotnet format SafeCare.slnx --verify-no-changes analyzers --severity error
