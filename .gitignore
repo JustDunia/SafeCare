@@ -362,3 +362,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Claude Code worktrees and subagent-driven-development scratch
+.claude/worktrees/
+.superpowers/
