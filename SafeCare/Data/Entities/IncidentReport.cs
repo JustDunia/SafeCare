@@ -7,13 +7,36 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace SafeCare.Data.Entities
 {
+    /// <summary>
+    /// A single adverse-event report submitted through the public form.
+    /// </summary>
+    /// <remarks>
+    /// Reporter and patient details are all optional — reporting anonymously is deliberately
+    /// allowed. What the report must carry is when it happened, where, and a description.
+    /// <para>
+    /// The timing is expressed one of two ways, never both: an exact <see cref="Date"/>
+    /// (including the time of day), or a <see cref="DateFrom"/>–<see cref="DateTo"/> range for
+    /// events the reporter can only place within a period. The constructor enforces this.
+    /// </para>
+    /// </remarks>
     [Display(Name = "Zgłoszenie zdarzenia")]
     public class IncidentReport
     {
+        /// <summary>
+        /// Required by EF Core for materialisation; not for application code.
+        /// </summary>
         protected IncidentReport()
         {
         }
 
+        /// <summary>
+        /// Creates a report, validating the date combination and stamping it as
+        /// <see cref="ReportStatus.New"/>.
+        /// </summary>
+        /// <exception cref="DomainException">
+        /// Neither an exact date nor a complete range was supplied, the range is inverted, or
+        /// the event is dated in the future.
+        /// </exception>
         [SetsRequiredMembers]
         public IncidentReport(
             string? name,
@@ -74,12 +97,21 @@ namespace SafeCare.Data.Entities
         public required Department Department { get; set; }
         public int DepartmentId { get; set; }
         public IList<IncidentDefinition> IncidentDefinitions { get; set; } = [];
+
+        /// <summary>
+        /// Free-text event description used when the reporter could not find a matching entry
+        /// in the dictionary. A non-empty value is what places the report in the
+        /// <see cref="IncidentCategory.Other"/> category, which has no dictionary rows of its own.
+        /// </summary>
         public string? OtherIncidentDefinition { get; set; }
         public required string IncidentDescription { get; set; }
         public DateTime CreatedAt { get; set; }
         public ReportStatus Status { get; set; }
 
 
+        /// <summary>
+        /// Enforces the "exact date or complete range, never in the future" rule.
+        /// </summary>
         private void ValidateDates(
             DateTime? dateFrom,
             DateTime? dateTo,

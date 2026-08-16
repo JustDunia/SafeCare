@@ -1,4 +1,4 @@
-@namespace SafeCare.Components.Form
+﻿@namespace SafeCare.Components.Form
 @using SafeCare.Services
 @inject IBotDetectionService BotDetectionService
 @inject ILogger<HoneypotFields> Logger
@@ -18,7 +18,7 @@
 @* Container styled to be completely invisible to humans but parseable by bots *@
 <div class="safecare-hp" aria-hidden="true" style="position: absolute; left: -9999px; top: -9999px; width: 1px; height: 1px; overflow: hidden; opacity: 0;">
     @* Field 1: Looks like a secondary email field *@
-    <label for="email2">Email potwierdzaj�cy</label>
+    <label for="email2">Email potwierdzający</label>
     <input type="email" 
            id="email2" 
            name="email2" 

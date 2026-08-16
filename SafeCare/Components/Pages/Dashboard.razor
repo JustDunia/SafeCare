@@ -12,6 +12,8 @@
 @page "/dashboard"
 @attribute [Authorize]
 
+<PageTitle>Zgłoszenia</PageTitle>
+
 <div>
     <MudGrid Class="pt-7 pb-4 ps-6 gap-4">
         <MudTextField Label="Zgłaszający" @bind-Value="request.Filter.FullName" Clearable OnKeyDown="HandleFilterInputKeyDown" Immediate="true" OnClearButtonClick="Reload" Class="text-filter" />
@@ -179,22 +181,22 @@
         }
 
         currentPage = PageQuery ?? IncidentReportsRequestVm.DefaultPage;
-            currentPageSize = PageSizeQuery ?? IncidentReportsRequestVm.DefaultPageSize;
+        currentPageSize = PageSizeQuery ?? IncidentReportsRequestVm.DefaultPageSize;
 
-            if (!string.IsNullOrEmpty(SortByQuery))
-            {
-                currentSortBy = SortByQuery;
-                currentSortDescending = SortDescQuery ?? false;
-            }
-
-            if (!string.IsNullOrEmpty(currentSortBy))
-            {
-                gridSortDefinitions = new Dictionary<string, SortDefinition<IncidentReportsGridItem>>
-                {
-                    { currentSortBy, new SortDefinition<IncidentReportsGridItem>(currentSortBy, currentSortDescending, 0, null!) }
-                };
-            }
+        if (!string.IsNullOrEmpty(SortByQuery))
+        {
+            currentSortBy = SortByQuery;
+            currentSortDescending = SortDescQuery ?? false;
         }
+
+        if (!string.IsNullOrEmpty(currentSortBy))
+        {
+            gridSortDefinitions = new Dictionary<string, SortDefinition<IncidentReportsGridItem>>
+            {
+                { currentSortBy, new SortDefinition<IncidentReportsGridItem>(currentSortBy, currentSortDescending, 0, null!) }
+            };
+        }
+    }
 
     private void UpdateQueryParameters()
     {
@@ -229,28 +231,27 @@
         }
 
         if (currentPage > IncidentReportsRequestVm.DefaultPage)
-                queryParams["page"] = currentPage;
+            queryParams["page"] = currentPage;
 
-            if (currentPageSize != IncidentReportsRequestVm.DefaultPageSize)
-                queryParams["pageSize"] = currentPageSize;
+        if (currentPageSize != IncidentReportsRequestVm.DefaultPageSize)
+            queryParams["pageSize"] = currentPageSize;
 
-            var isDefaultSort = currentSortBy == IncidentReportsRequestVm.DefaultSortBy 
-                && currentSortDescending == IncidentReportsRequestVm.DefaultSortDescending;
-    
-            if (!isDefaultSort && !string.IsNullOrEmpty(currentSortBy))
-            {
-                queryParams["sortBy"] = currentSortBy;
-                if (currentSortDescending)
-                    queryParams["sortDesc"] = true;
-            }
+        var isDefaultSort = currentSortBy == IncidentReportsRequestVm.DefaultSortBy
+            && currentSortDescending == IncidentReportsRequestVm.DefaultSortDescending;
 
-                var uri = NavigationManager.GetUriWithQueryParameters("/dashboard", queryParams);
-                NavigationManager.NavigateTo(uri, replace: true);
+        if (!isDefaultSort && !string.IsNullOrEmpty(currentSortBy))
+        {
+            queryParams["sortBy"] = currentSortBy;
+            if (currentSortDescending)
+                queryParams["sortDesc"] = true;
         }
+
+        var uri = NavigationManager.GetUriWithQueryParameters("/dashboard", queryParams);
+        NavigationManager.NavigateTo(uri, replace: true);
+    }
 
     private async Task HandleFilterInputKeyDown(KeyboardEventArgs args)
     {
-        Console.WriteLine(args.Key);
         if (args.Key != "Enter")
         {
             return;
@@ -272,7 +273,7 @@
         await Reload();
     }
 
-    private async Task<GridData<IncidentReportsGridItem>> LoadData(GridState<IncidentReportsGridItem> state)
+    private async Task<GridData<IncidentReportsGridItem>> LoadData(GridState<IncidentReportsGridItem> state, CancellationToken cancellationToken)
     {
         request.Page = state.Page;
         request.PageSize = state.PageSize;
@@ -301,7 +302,7 @@
 
         try
         {
-            result = await IncidentReportService.GetReports(request);
+            result = await IncidentReportService.GetReports(request, cancellationToken);
         }
         catch (Exception ex)
         {

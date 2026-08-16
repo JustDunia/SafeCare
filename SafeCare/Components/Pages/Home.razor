@@ -1,4 +1,4 @@
-@page "/"
+Ôªø@page "/"
 @using SafeCare.Components.Form
 @using System.ComponentModel.DataAnnotations
 @using SafeCare.Dtos
@@ -17,15 +17,15 @@
 @inject ILogger<Home> Logger
 @inject IRateLimitService RateLimitService
 
-<PageTitle>Zg≥oszenie zdarzenia</PageTitle>
+<PageTitle>Zg≈Çoszenie zdarzenia</PageTitle>
 
 <MudForm @ref="form" Model="@model" Validation="@(validator.ValidateValue)">
     <MudStack Spacing="5">
         <FormHeader />
-        <FormCard Title="Dane osoby zg≥aszajπcej" Number="1">
+        <FormCard Title="Dane osoby zg≈ÇaszajƒÖcej" Number="1">
             <MudGrid>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="model.Name" Label="ImiÍ" For="@(() => model.Name)" />
+                    <MudTextField @bind-Value="model.Name" Label="Imiƒô" For="@(() => model.Name)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="model.Surname" Label="Nazwisko" For="@(() => model.Surname)" />
@@ -38,10 +38,10 @@
                 </MudItem>
             </MudGrid>
         </FormCard>
-        <FormCard Title="Dane osoby ktÛrej dotyczy zg≥oszenie" Number="2">
+        <FormCard Title="Dane osoby kt√≥rej dotyczy zg≈Çoszenie" Number="2">
             <MudGrid>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="model.PatientName" Label="ImiÍ" For="@(() => model.PatientName)" />
+                    <MudTextField @bind-Value="model.PatientName" Label="Imiƒô" For="@(() => model.PatientName)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="model.PatientSurname" Label="Nazwisko" For="@(() => model.PatientSurname)" />
@@ -50,7 +50,7 @@
                     <MudTextField @bind-Value="model.PatientDob" Format="yyyy-MM-dd" Label="Data urodzenia" InputType="InputType.Date" Clearable For="@(() => model.PatientDob)" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudSelect @bind-Value="model.PatientGender" Label="P≥eÊ" For="@(() => model.PatientGender)" Clearable>
+                    <MudSelect @bind-Value="model.PatientGender" Label="P≈Çeƒá" For="@(() => model.PatientGender)" Clearable>
                         <MudSelectItem T="Gender ?" Value="Gender.Female">@Gender.Female.GetDisplayName()</MudSelectItem>
                         <MudSelectItem T="Gender ?" Value="Gender.Male">@Gender.Male.GetDisplayName()</MudSelectItem>
                     </MudSelect>
@@ -60,7 +60,7 @@
         <FormCard Title="Czas i miejsce zdarzenia" Number="3">
             <MudGrid>
                 <MudItem xs="12" Class="d-flex justify-start">
-                    <MudSwitch @bind-Value="model.IsDatePeriod" @bind-Value:after="HandleIsDatePeriodChanged" Label="Przedzia≥ czasu" Color="Color.Primary" />
+                    <MudSwitch @bind-Value="model.IsDatePeriod" @bind-Value:after="HandleIsDatePeriodChanged" Label="Przedzia≈Ç czasu" Color="Color.Primary" />
                 </MudItem>
 
                 @if (model.IsDatePeriod)
@@ -106,7 +106,7 @@
                         </MudExpansionPanel>
                     }
                     <MudExpansionPanel Text="@IncidentCategory.Other.GetDisplayName()">
-                        <MudTextField Label="KrÛtki opis" @bind-Value="model.OtherIncidentDefinition" />
+                        <MudTextField Label="Kr√≥tki opis" @bind-Value="model.OtherIncidentDefinition" />
                     </MudExpansionPanel>
                 </MudExpansionPanels>
                 @if (!string.IsNullOrEmpty(incidentDefinitionsError))
@@ -115,12 +115,19 @@
                 }
             </MudStack>
         </FormCard>
-        <FormCard Title="Dok≥adny opis zdarzenia" Number="5">
-            <MudTextField @bind-Value="model.IncidentDescription" Lines="5" AutoGrow MaxLength="5000" For="@(() => model.IncidentDescription)" />
+        <FormCard Title="Dok≈Çadny opis zdarzenia" Number="5">
+            @* MudBlazor 9 replaced the AutoGrow flag with Sizing/MaxLines. The old attribute
+               was not a parameter any more, so it rendered as inert HTML and the box never grew. *@
+            <MudTextField @bind-Value="model.IncidentDescription"
+                          Lines="5"
+                          Sizing="InputSizing.Auto"
+                          MaxLines="20"
+                          MaxLength="5000"
+                          For="@(() => model.IncidentDescription)" />
         </FormCard>
         @* Invisible honeypot fields for bot detection *@
         <HoneypotFields @ref="_honeypotFields" />
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Class="align-self-center px-15">Wyúlij</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Class="align-self-center px-15">Wy≈õlij</MudButton>
     </MudStack>
 </MudForm>
 
@@ -183,7 +190,7 @@
             var timeRemaining = RateLimitService.GetTimeUntilReset(_circuitId, "FormSubmission");
             var seconds = timeRemaining?.TotalSeconds ?? 60;
             Logger.LogWarning("Rate limit exceeded for circuit {CircuitId}", _circuitId);
-            Snackbar.Add($"Zbyt wiele zg≥oszeÒ. SprÛbuj ponownie za {seconds:F0} sekund.", Severity.Warning);
+            Snackbar.Add($"Zbyt wiele zg≈Çosze≈Ñ. Spr√≥buj ponownie za {seconds:F0} sekund.", Severity.Warning);
             return;
         }
 
@@ -195,7 +202,7 @@
             return;
         }
 
-        await form!.Validate();
+        await form!.ValidateAsync();
 
         var incidentErrors = await validator.ValidateValue(model, nameof(model.SelectedIncidentDefinitions));
         if (incidentErrors.Any())
@@ -211,7 +218,7 @@
                 var reportId = await IncidentReportService.CreateReport(dto);
                 Logger.LogInformation("Incident report submitted successfully with Id {ReportId}.", reportId);
 
-                Snackbar.Add("Zg≥oszenie zosta≥o wys≥ane, dziÍkujemy.", Severity.Success);
+                Snackbar.Add("Zg≈Çoszenie zosta≈Ço wys≈Çane, dziƒôkujemy.", Severity.Success);
                 model = new();
                 incidentDefinitionsError = null;
                 _honeypotFields?.Reset();
@@ -222,12 +229,12 @@
             catch (DomainException dex)
             {
                 Logger.LogWarning(dex, "A domain error occurred while submitting the incident report: {Message}", dex.Message);
-                Snackbar.Add($"Wystπpi≥ b≥πd podczas wysy≥ania zg≥oszenia: {dex.Message}", Severity.Error);
+                Snackbar.Add($"WystƒÖpi≈Ç b≈ÇƒÖd podczas wysy≈Çania zg≈Çoszenia: {dex.Message}", Severity.Error);
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "An unexpected error occurred while submitting the incident report.");
-                Snackbar.Add($"Wystπpi≥ b≥πd podczas wysy≥ania zg≥oszenia.", Severity.Error);
+                Snackbar.Add($"WystƒÖpi≈Ç b≈ÇƒÖd podczas wysy≈Çania zg≈Çoszenia.", Severity.Error);
             }
         }
     }

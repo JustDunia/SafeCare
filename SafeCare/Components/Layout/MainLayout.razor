@@ -18,7 +18,7 @@
         </MudButton>
         <MudSpacer />
         <AuthorizeView>
-            <Authorized>
+            <Authorized Context="authContext">
                 <MudMenu AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter" >
                     <ActivatorContent>
                         <MudButton Color="Color.Inherit">
@@ -27,6 +27,10 @@
                         </MudButton>
                     </ActivatorContent>
                     <ChildContent>
+                        @if (isAdmin)
+                        {
+                            <MudMenuItem Href="/admin/users">Zarządzanie użytkownikami</MudMenuItem>
+                        }
                         <MudMenuItem Href="/account">Ustawienia konta</MudMenuItem>
                         <form method="post" action="/signout" id="logoutForm">
                             <button type="submit" style="width:100%">Wyloguj</button>
@@ -69,6 +73,7 @@
     private string currentPath = "/";
     private string firstName = string.Empty;
     private string lastName = string.Empty;
+    private bool isAdmin;
 
     public void SetPath(string path)
     {
@@ -86,10 +91,24 @@
             var user = authState.User;
             if (user.Identity is not null && user.Identity.IsAuthenticated)
             {
-                var userEntity = await UserManager.GetUserAsync(authState.User)
-                    ?? throw new InvalidOperationException("Authenticated user not found in database.");
+                var userEntity = await UserManager.GetUserAsync(authState.User);
+
+                if (userEntity is null)
+                {
+                    // The cookie is still valid but the account behind it is gone — an admin
+                    // deleted it while this session was open. Throwing here would take down
+                    // the layout, and with it every page. Render the shell without the user
+                    // menu instead; Identity's security stamp validation signs the stale
+                    // cookie out on its next check.
+                    Log.Warning(
+                        "Authenticated principal {UserName} has no matching user record; rendering layout without account details.",
+                        user.Identity.Name);
+                    return;
+                }
+
                 firstName = userEntity.FirstName;
                 lastName = userEntity.LastName;
+                isAdmin = await UserManager.IsInRoleAsync(userEntity, AppRoles.Admin);
             }
         }
     }

@@ -1,0 +1,39 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager NavigationManager
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            RedirectToLogin();
+            return;
+        }
+
+        var authState = await AuthenticationState;
+        var isAuthenticated = authState.User.Identity?.IsAuthenticated == true;
+
+        if (isAuthenticated)
+        {
+            NavigationManager.NavigateTo("/dashboard", forceLoad: true);
+            return;
+        }
+
+        RedirectToLogin();
+    }
+
+    private void RedirectToLogin()
+    {
+        // ToBaseRelativePath returns a path without a leading slash ("details/5"), but
+        // /signin only accepts return URLs that start with "/" — without the prefix the
+        // endpoint silently discarded every returnUrl and always landed on /dashboard.
+        // The value is also escaped so that a path carrying its own query string survives.
+        var relativePath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var returnUrl = Uri.EscapeDataString($"/{relativePath}");
+
+        NavigationManager.NavigateTo($"/login?returnUrl={returnUrl}", forceLoad: true);
+    }
+}

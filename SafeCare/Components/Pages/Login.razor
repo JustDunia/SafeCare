@@ -1,11 +1,8 @@
 ﻿@page "/login"
-@using System.Web
-@using Microsoft.AspNetCore.Antiforgery
 @using Microsoft.AspNetCore.Components.Authorization
-@using SafeCare.ViewModels
 @inject NavigationManager NavigationManager
-@inject IAntiforgery Antiforgery
-@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Logowanie</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
     <MudCard Elevation="4">
@@ -30,7 +27,9 @@
                 MaxLength="256"
                 Immediate="true"
                 autocomplete="username" />
-                <input type="hidden" name="userName" value="@HttpUtility.HtmlEncode(userName)" />
+                @* Razor already HTML-encodes attribute values — encoding here as well would
+                   post a double-encoded value (e.g. "a&b" arriving as "a&amp;b"). *@
+                <input type="hidden" name="userName" value="@userName" />
 
                 <MudTextField @bind-Value="password"
                 Label="Hasło"
@@ -47,7 +46,7 @@
                     <MudCheckBox @bind-Value="rememberMe" Label="Zapamiętaj mnie" Color="Color.Primary" Class="mb-4" />
                 </MudItem>
                 <input type="hidden" name="rememberMe" value="@rememberMe.ToString().ToLowerInvariant()" />
-                <input type="hidden" name="returnUrl" value="@HttpUtility.HtmlEncode(ReturnUrl)" />
+                <input type="hidden" name="returnUrl" value="@ReturnUrl" />
 
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"

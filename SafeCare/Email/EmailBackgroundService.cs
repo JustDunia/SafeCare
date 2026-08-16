@@ -2,6 +2,15 @@ using Serilog;
 
 namespace SafeCare.Email
 {
+    /// <summary>
+    /// Drains <see cref="IEmailQueue"/> for the lifetime of the application and delivers each
+    /// message, retrying up to three times with exponential backoff.
+    /// </summary>
+    /// <remarks>
+    /// A fresh DI scope is created per attempt so that a transient <see cref="IEmailService"/>
+    /// (and its SMTP client) is never reused across retries. Exhausting all attempts is logged
+    /// and dropped: there is no dead-letter store.
+    /// </remarks>
     public class EmailBackgroundService(IEmailQueue queue, IServiceScopeFactory scopeFactory) : BackgroundService
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)

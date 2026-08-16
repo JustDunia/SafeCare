@@ -13,6 +13,6 @@ namespace SafeCare.ViewModels
         public int PageSize { get; set; } = DefaultPageSize;
         public ICollection<SortDefinition<IncidentReportsGridItem>> SortDefinitions { get; set; } =
             [new SortDefinition<IncidentReportsGridItem>(DefaultSortBy, DefaultSortDescending, 0, x => x.Id)];
-        public IncidentReportFiler Filter { get; set; } = new();
+        public IncidentReportFilter Filter { get; set; } = new();
     }
 }

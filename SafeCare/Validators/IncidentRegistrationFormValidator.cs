@@ -1,80 +1,101 @@
-using FluentValidation;
+ï»¿using FluentValidation;
 using SafeCare.ViewModels;
 
 namespace SafeCare.Validators;
 
+/// <summary>
+/// Validation rules for the public incident form, with messages in Polish.
+/// </summary>
+/// <remarks>
+/// Reporter and patient details are optional â€” anonymous reporting is intentional â€” so those
+/// rules only apply once a field has been filled in. What is always required is the timing,
+/// the ward, at least one event type (or a free-text description) and the narrative.
+/// </remarks>
 public class IncidentRegistrationFormValidator : AbstractValidator<IncidentRegistrationFormVm>
 {
+    /// <summary>
+    /// Matches a personal name: one or more letters, optionally repeated in groups
+    /// separated by a space, hyphen or apostrophe (e.g. "Anna-Maria", "O'Brien").
+    /// </summary>
+    /// <remarks>
+    /// Uses the Unicode letter class <c>\p{L}</c> rather than a literal list of Polish
+    /// characters. Spelling the diacritics out made the rule silently depend on the source
+    /// file's encoding: when this file was saved as Windows-1250 the class decoded to
+    /// replacement characters and every name containing "Ä…", "Å‚", "Å¼", â€¦ was rejected.
+    /// <c>\p{L}</c> is pure ASCII in source form, so it cannot break that way again.
+    /// </remarks>
+    private const string NamePattern = @"^\p{L}+(?:[ '\-]\p{L}+)*$";
+
     public IncidentRegistrationFormValidator()
     {
         RuleFor(x => x.Name)
-            .Matches(@"^[a-zA-Z¹æê³ñóœŸ¿¥ÆÊ£ÑÓœ¯]+$")
-            .WithMessage("Imiê mo¿e zawieraæ tylko litery")
+            .Matches(NamePattern)
+            .WithMessage("ImiÄ™ moÅ¼e zawieraÄ‡ tylko litery")
             .Length(2, 50)
-            .WithMessage("Imiê musi mieæ od 2 do 50 znaków")
+            .WithMessage("ImiÄ™ musi mieÄ‡ od 2 do 50 znakÃ³w")
             .When(x => !string.IsNullOrEmpty(x.Name));
 
         RuleFor(x => x.Surname)
-            .Matches(@"^[a-zA-Z¹æê³ñóœŸ¿¥ÆÊ£ÑÓŒ¯]+$")
-            .WithMessage("Nazwisko mo¿e zawieraæ tylko litery")
+            .Matches(NamePattern)
+            .WithMessage("Nazwisko moÅ¼e zawieraÄ‡ tylko litery")
             .Length(2, 50)
-            .WithMessage("Nazwisko musi mieæ od 2 do 50 znaków")
+            .WithMessage("Nazwisko musi mieÄ‡ od 2 do 50 znakÃ³w")
             .When(x => !string.IsNullOrEmpty(x.Surname));
 
         RuleFor(x => x.Phone)
             .Matches(@"^(\+48)?[\s\-]?[1-9]\d{8}$")
-            .WithMessage("Numer telefonu musi byæ poprawnym polskim numerem telefonu")
+            .WithMessage("Numer telefonu musi byÄ‡ poprawnym polskim numerem telefonu")
             .When(x => !string.IsNullOrEmpty(x.Phone));
 
         RuleFor(x => x.Email)
             .EmailAddress()
-            .WithMessage("Adres e-mail musi byæ poprawny")
+            .WithMessage("Adres e-mail musi byÄ‡ poprawny")
             .When(x => !string.IsNullOrEmpty(x.Email));
 
         RuleFor(x => x.PatientName)
-            .Matches(@"^[a-zA-Z¹æê³ñóœŸ¿¥ÆÊ£ÑÓŒ¯]+$")
-            .WithMessage("Imiê mo¿e zawieraæ tylko litery")
+            .Matches(NamePattern)
+            .WithMessage("ImiÄ™ moÅ¼e zawieraÄ‡ tylko litery")
             .Length(2, 50)
-            .WithMessage("Imiê musi mieæ od 2 do 50 znaków")
+            .WithMessage("ImiÄ™ musi mieÄ‡ od 2 do 50 znakÃ³w")
             .When(x => !string.IsNullOrEmpty(x.PatientName));
 
         RuleFor(x => x.PatientSurname)
-            .Matches(@"^[a-zA-Z¹æê³ñóœŸ¿¥ÆÊ£ÑÓŒ¯]+$")
-            .WithMessage("Nazwisko mo¿e zawieraæ tylko litery")
+            .Matches(NamePattern)
+            .WithMessage("Nazwisko moÅ¼e zawieraÄ‡ tylko litery")
             .Length(2, 50)
-            .WithMessage("Nazwisko musi mieæ od 2 do 50 znaków")
+            .WithMessage("Nazwisko musi mieÄ‡ od 2 do 50 znakÃ³w")
             .When(x => !string.IsNullOrEmpty(x.PatientSurname));
 
         RuleFor(x => x.PatientDob)
             .LessThanOrEqualTo(DateTime.Today)
-            .WithMessage("Data urodzenia nie mo¿e byæ w przysz³oœci")
+            .WithMessage("Data urodzenia nie moÅ¼e byÄ‡ w przyszÅ‚oÅ›ci")
             .GreaterThanOrEqualTo(DateTime.Today.AddYears(-120))
-            .WithMessage("Data urodzenia nie mo¿e byæ starsza ni¿ 120 lat")
+            .WithMessage("Data urodzenia nie moÅ¼e byÄ‡ starsza niÅ¼ 120 lat")
             .When(x => x.PatientDob.HasValue);
 
         When(x => x.IsDatePeriod, () =>
         {
             RuleFor(x => x.DateFrom)
                 .NotNull()
-                .WithMessage("Data rozpoczêcia jest wymagana");
+                .WithMessage("Data rozpoczÄ™cia jest wymagana");
 
             RuleFor(x => x.DateFrom)
                 .LessThanOrEqualTo(DateTime.Today)
-                .WithMessage("Data rozpoczêcia nie mo¿e byæ w przysz³oœci")
+                .WithMessage("Data rozpoczÄ™cia nie moÅ¼e byÄ‡ w przyszÅ‚oÅ›ci")
                 .When(x => x.DateFrom.HasValue);
 
             RuleFor(x => x.DateTo)
                 .NotNull()
-                .WithMessage("Data zakoñczenia jest wymagana");
+                .WithMessage("Data zakoÅ„czenia jest wymagana");
 
             RuleFor(x => x.DateTo)
                 .LessThanOrEqualTo(DateTime.Today)
-                .WithMessage("Data zakoñczenia nie mo¿e byæ w przysz³oœci")
+                .WithMessage("Data zakoÅ„czenia nie moÅ¼e byÄ‡ w przyszÅ‚oÅ›ci")
                 .When(x => x.DateTo.HasValue);
 
             RuleFor(x => x.DateTo)
                 .GreaterThanOrEqualTo(x => x.DateFrom)
-                .WithMessage("Data zakoñczenia musi byæ póŸniejsza lub równa dacie rozpoczêcia")
+                .WithMessage("Data zakoÅ„czenia musi byÄ‡ pÃ³Åºniejsza lub rÃ³wna dacie rozpoczÄ™cia")
                 .When(x => x.DateFrom.HasValue && x.DateTo.HasValue);
         });
 
@@ -86,7 +107,7 @@ public class IncidentRegistrationFormValidator : AbstractValidator<IncidentRegis
 
             RuleFor(x => x.Date)
                 .LessThanOrEqualTo(DateTime.Today)
-                .WithMessage("Data nie mo¿e byæ w przysz³oœci")
+                .WithMessage("Data nie moÅ¼e byÄ‡ w przyszÅ‚oÅ›ci")
                 .When(x => x.Date.HasValue);
 
             RuleFor(x => x.Time)
@@ -95,7 +116,7 @@ public class IncidentRegistrationFormValidator : AbstractValidator<IncidentRegis
 
             RuleFor(x => x)
                 .Must(x => !IsFutureDateTime(x.Date, x.Time))
-                .WithMessage("Data i czas nie mog¹ byæ w przysz³oœci")
+                .WithMessage("Data i czas nie mogÄ… byÄ‡ w przyszÅ‚oÅ›ci")
                 .When(x => x.Date.HasValue && !string.IsNullOrEmpty(x.Time))
                 .WithName("Time");
         });
@@ -106,16 +127,20 @@ public class IncidentRegistrationFormValidator : AbstractValidator<IncidentRegis
 
         RuleFor(x => x)
             .Must(x => x.SelectedIncidentDefinitions.Any() || !string.IsNullOrWhiteSpace(x.OtherIncidentDefinition))
-            .WithMessage("Nale¿y wybraæ co najmniej jeden rodzaj zdarzenia lub podaæ w³asny opis")
+            .WithMessage("NaleÅ¼y wybraÄ‡ co najmniej jeden rodzaj zdarzenia lub podaÄ‡ wÅ‚asny opis")
             .WithName("SelectedIncidentDefinitions");
 
         RuleFor(x => x.IncidentDescription)
             .NotEmpty()
             .WithMessage("Opis zdarzenia jest wymagany")
             .MaximumLength(5000)
-            .WithMessage("Opis zdarzenia mo¿e mieæ maksymalnie 5000 znaków");
+            .WithMessage("Opis zdarzenia moÅ¼e mieÄ‡ maksymalnie 5000 znakÃ³w");
     }
 
+    /// <summary>
+    /// Combines the separate date and time inputs to catch an event timestamped later today,
+    /// which a date-only comparison would let through.
+    /// </summary>
     private bool IsFutureDateTime(DateTime? date, string? time)
     {
         if (!date.HasValue || string.IsNullOrEmpty(time))
@@ -132,6 +157,10 @@ public class IncidentRegistrationFormValidator : AbstractValidator<IncidentRegis
         return false;
     }
 
+    /// <summary>
+    /// Adapter that lets MudBlazor drive this validator per field: MudForm calls it with the
+    /// model and a property name and expects the messages for that property alone.
+    /// </summary>
     public Func<object, string, Task<IEnumerable<string>>> ValidateValue => async (model, propertyName) =>
     {
         var validationCtx = ValidationContext<IncidentRegistrationFormVm>.CreateWithOptions(

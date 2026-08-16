@@ -1,0 +1,260 @@
+@page "/admin/users"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using SafeCare.Components
+@using SafeCare.Components.Layout
+@using SafeCare.Data.Entities
+@using SafeCare.Mappings
+@using SafeCare.Services
+@using SafeCare.Validators
+@using SafeCare.ViewModels
+@using Serilog
+@attribute [Authorize(Roles = AppRoles.Admin)]
+@inject IUserManagementService UserManagementService
+@inject UserManager<User> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Zarządzanie użytkownikami</PageTitle>
+
+<MudStack Spacing="4" Class="mt-4">
+    <MudText Typo="Typo.h4">Zarządzanie użytkownikami</MudText>
+
+    <MudCard>
+        <MudCardHeader>
+            <MudText Typo="Typo.h6">Dodaj nowego użytkownika</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudForm @ref="form" Model="model" Validation="@(validator.ValidateValue)">
+                <MudGrid>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="model.UserName" Label="Nazwa użytkownika" For="@(() => model.UserName)" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="model.Email" Label="Adres e-mail" For="@(() => model.Email)" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="model.FirstName" Label="Imię" For="@(() => model.FirstName)" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="model.LastName" Label="Nazwisko" For="@(() => model.LastName)" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="model.Password"
+                                      Label="Hasło"
+                                      InputType="InputType.Password"
+                                      For="@(() => model.Password)" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="model.ConfirmPassword"
+                                      Label="Potwierdź hasło"
+                                      InputType="InputType.Password"
+                                      For="@(() => model.ConfirmPassword)" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect @bind-Value="model.Role" Label="Rola" For="@(() => model.Role)">
+                            <MudSelectItem Value="@AppRoles.User">User</MudSelectItem>
+                            <MudSelectItem Value="@AppRoles.Admin">Admin</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" Class="d-flex align-center">
+                        <MudButton Color="Color.Primary"
+                                   Variant="Variant.Filled"
+                                   OnClick="CreateUserAsync"
+                                   Disabled="isSaving">
+                            Dodaj użytkownika
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        </MudCardContent>
+    </MudCard>
+
+    <MudCard>
+        <MudCardHeader>
+            <MudText Typo="Typo.h6">Lista użytkowników</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate Color="Color.Primary" />
+            }
+            else
+            {
+                <MudTable Items="users" Dense Hover Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Nazwa użytkownika</MudTh>
+                        <MudTh>Imię i nazwisko</MudTh>
+                        <MudTh>E-mail</MudTh>
+                        <MudTh>Rola</MudTh>
+                        <MudTh>Akcje</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.UserName</MudTd>
+                        <MudTd>@context.FullName</MudTd>
+                        <MudTd>@context.Email</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Color="@(context.Role == AppRoles.Admin ? Color.Warning : Color.Info)">@context.Role</MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       Disabled="@(context.Id == currentUserId)"
+                                       OnClick="() => OpenDeleteDialogAsync(context)">
+                                Usuń
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudStack>
+
+@code {
+    [CascadingParameter]
+    private MainLayout MainLayout { get; set; } = default!;
+
+    private readonly AdminUserCreateValidator validator = new();
+    private AdminUserCreateVm model = new()
+    {
+        Role = AppRoles.User
+    };
+
+    private MudForm? form;
+    private bool isLoading = true;
+    private bool isSaving;
+    private Guid currentUserId;
+    private IReadOnlyList<AdminUserListItemVm> users = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        MainLayout.SetPath("/admin/users");
+        await LoadCurrentUserAsync();
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadCurrentUserAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var currentUser = await UserManager.GetUserAsync(authState.User);
+
+        if (currentUser is null)
+        {
+            // Account deleted while this session was open. currentUserId stays Guid.Empty,
+            // which only disables the "can't delete yourself" guard in the UI — the service
+            // still refuses to remove the last remaining administrator.
+            Log.Warning("Authenticated admin has no matching user record; user management opened without self-delete protection.");
+            Snackbar.Add("Nie udało się ustalić bieżącego użytkownika. Zaloguj się ponownie.", Severity.Warning);
+            return;
+        }
+
+        currentUserId = currentUser.Id;
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var result = await UserManagementService.GetUsersAsync();
+            users = result.Select(x => x.ToVm()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to load users list.");
+            Snackbar.Add("Nie udało się pobrać listy użytkowników.", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CreateUserAsync()
+    {
+        if (form is null)
+        {
+            return;
+        }
+
+        await form.ValidateAsync();
+        if (!form.IsValid)
+        {
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            var result = await UserManagementService.CreateUserAsync(model.ToDto());
+
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? "Nie udało się utworzyć użytkownika.", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Użytkownik został utworzony.", Severity.Success);
+
+            await form.ResetAsync();
+            model = new AdminUserCreateVm
+            {
+                Role = AppRoles.User
+            };
+            await LoadUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error while creating user.");
+            Snackbar.Add("Nie udało się utworzyć użytkownika.", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task OpenDeleteDialogAsync(AdminUserListItemVm user)
+    {
+        var parameters = new DialogParameters
+        {
+            [nameof(DeleteUserDialog.UserName)] = user.UserName
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dialogRef = await DialogService.ShowAsync<DeleteUserDialog>("Usuń użytkownika", parameters, options);
+        var dialogResult = await dialogRef.Result;
+
+        if (dialogResult is null || dialogResult.Canceled)
+        {
+            return;
+        }
+
+        await DeleteUserAsync(user);
+    }
+
+    private async Task DeleteUserAsync(AdminUserListItemVm user)
+    {
+        try
+        {
+            var result = await UserManagementService.DeleteUserAsync(user.Id, currentUserId);
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? "Nie udało się usunąć użytkownika.", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Użytkownik został usunięty.", Severity.Success);
+            await LoadUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error while deleting user {UserId}", user.Id);
+            Snackbar.Add("Nie udało się usunąć użytkownika.", Severity.Error);
+        }
+    }
+}

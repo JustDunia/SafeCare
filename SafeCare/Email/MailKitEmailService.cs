@@ -5,11 +5,22 @@ using MimeKit;
 
 namespace SafeCare.Email
 {
+    /// <summary>
+    /// Delivers a single e-mail. The concrete provider is chosen from the <c>Email:Provider</c>
+    /// configuration value — see <c>Utils/EmailConfig.cs</c>.
+    /// </summary>
     public interface IEmailService
     {
+        /// <summary>
+        /// Sends the message, throwing on failure so that the caller can retry.
+        /// </summary>
         Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default);
     }
 
+    /// <summary>
+    /// SMTP delivery via MailKit. Selected when <c>Email:Provider</c> is <c>Smtp</c>, and used
+    /// in development against MailPit on port 1025.
+    /// </summary>
     public class MailKitEmailService(IOptions<EmailSettings> options) : IEmailService
     {
         private readonly EmailSettings _settings = options.Value;

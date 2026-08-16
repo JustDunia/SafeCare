@@ -1,0 +1,35 @@
+root = true
+
+# Every source file in this repository is UTF-8. This matters more than usual here:
+# the public incident form is written in Polish, and three files were once saved as
+# Windows-1250. The compiler reads sources as UTF-8, so the diacritics decoded to
+# replacement characters — the form rendered as mojibake and the name-validation regex
+# stopped matching Polish names. Keep charset pinned so editors cannot reintroduce that.
+[*]
+charset = utf-8-bom
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{cs,razor}]
+indent_size = 4
+
+# Namespaces: the tree mixes block-scoped and file-scoped styles. New code should prefer
+# file-scoped, but this is a suggestion rather than a warning so existing files that use
+# the block form do not light up with diagnostics.
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:suggestion
+csharp_style_var_for_built_in_types = false:none
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_prefer_braces = true:suggestion
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion

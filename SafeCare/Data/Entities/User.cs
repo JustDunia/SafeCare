@@ -4,13 +4,33 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace SafeCare.Data.Entities
 {
+    /// <summary>
+    /// A member of hospital staff with access to the admin module. Extends the Identity user
+    /// with a display name and a notification preference.
+    /// </summary>
     public class User : IdentityUser<Guid>
     {
         public string FirstName { get; set; } = null!;
+
         public string LastName { get; set; } = null!;
+
+        /// <summary>
+        /// Opt-in for the e-mail sent whenever a new report arrives. Users who leave this off
+        /// are excluded from the BCC list, so the notification is strictly opt-in.
+        /// </summary>
         public bool ReceiveEmailNotifications { get; set; } = false;
     }
 
+    /// <summary>
+    /// Maps <see cref="User"/> and seeds the built-in <c>admin</c> account.
+    /// </summary>
+    /// <remarks>
+    /// The administrator is seeded here through <c>HasData</c>, which bakes it into the initial
+    /// migration rather than into <c>SeedData.sql</c>. <c>IdentitySeeder</c> throws on startup
+    /// if the account is missing, so this seed must not be removed. Its password hash is a
+    /// fixed literal because <c>HasData</c> requires deterministic values — this is a
+    /// development credential and must be rotated before any real deployment.
+    /// </remarks>
     public class UserEntityConfiguration : IEntityTypeConfiguration<User>
     {
         public void Configure(EntityTypeBuilder<User> builder)

@@ -2,8 +2,15 @@ using SafeCare.Email;
 
 namespace SafeCare.Utils
 {
+    /// <summary>
+    /// Registers the fire-and-forget e-mail notification pipeline.
+    /// </summary>
     public static class EmailConfig
     {
+        /// <summary>
+        /// Binds <see cref="EmailSettings"/> and wires the queue, the delivery provider chosen
+        /// by <c>Email:Provider</c>, and the background sender.
+        /// </summary>
         public static IServiceCollection AddEmailNotifications(
             this IServiceCollection services,
             IConfiguration configuration)

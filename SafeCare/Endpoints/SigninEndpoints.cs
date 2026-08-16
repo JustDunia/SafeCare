@@ -5,8 +5,22 @@ using Serilog;
 
 namespace SafeCare.Endpoints
 {
+    /// <summary>
+    /// Minimal API form-post endpoints for signing in and out.
+    /// </summary>
+    /// <remarks>
+    /// Authentication cannot happen inside a Blazor circuit: setting or clearing the auth
+    /// cookie requires a real HTTP response, and by the time a SignalR message arrives the
+    /// response headers are long gone. <c>Login.razor</c> is therefore a plain
+    /// <c>&lt;form method="post"&gt;</c> that posts here, and failures come back as
+    /// <c>?error=</c> query parameters rather than as rendered state.
+    /// </remarks>
     public static class SigninEndpoints
     {
+        /// <summary>
+        /// Handles <c>POST /signin</c>: validates the credentials, issues the auth cookie and
+        /// redirects to <c>returnUrl</c> when it is safe, otherwise to <c>/dashboard</c>.
+        /// </summary>
         public static void MapSignInEndpoint(this IEndpointRouteBuilder app)
         {
             app.MapPost("/signin", async (
@@ -27,7 +41,9 @@ namespace SafeCare.Endpoints
                     return Results.Redirect("/login?error=InvalidCredentials");
                 }
 
-                // Validate returnUrl to prevent open redirect attacks
+                // Only site-relative paths are accepted, so a crafted "?returnUrl=https://evil"
+                // cannot turn the login form into an open redirect. Anything else is dropped
+                // and the user lands on the dashboard.
                 string? safeReturnUrl = null;
                 if (!string.IsNullOrEmpty(returnUrl))
                 {
@@ -58,6 +74,9 @@ namespace SafeCare.Endpoints
             });
         }
 
+        /// <summary>
+        /// Handles <c>POST /signout</c>: clears the auth cookie and returns to the login page.
+        /// </summary>
         public static void MapSignOutEndpoint(this IEndpointRouteBuilder app)
         {
             app.MapPost("/signout", async (SignInManager<User> signInManager, HttpContext httpContext) =>
