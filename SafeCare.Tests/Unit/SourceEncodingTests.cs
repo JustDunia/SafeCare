@@ -36,10 +36,12 @@ public class SourceEncodingTests
 
             var relative = Path.GetRelativePath(root.FullName, file.FullName);
 
-            if (relative.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                || relative.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
-                || relative.Contains($"{Path.DirectorySeparatorChar}.claude{Path.DirectorySeparatorChar}")
-                || relative.Contains($"{Path.DirectorySeparatorChar}.superpowers{Path.DirectorySeparatorChar}"))
+            // Split into path segments rather than substring-matching on separator-wrapped
+            // names: Path.GetRelativePath never emits a leading separator, so a root-level
+            // bin/obj/.claude/.superpowers directory would otherwise slip past a pattern that
+            // requires one on both sides and get enumerated (e.g. a nested worktree checkout
+            // under .claude at the repository root).
+            if (relative.Split(Path.DirectorySeparatorChar).Any(s => s is "bin" or "obj" or ".claude" or ".superpowers"))
             {
                 continue;
             }

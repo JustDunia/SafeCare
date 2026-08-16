@@ -36,10 +36,11 @@ public class IncidentEmailTemplateTests
 
         var message = IncidentEmailTemplate.Build(report, ["a@szpital.pl"]);
 
-        // WebUtility.HtmlEncode numeric-escapes a handful of Latin-1 letters that had legacy
-        // HTML4 named entities (e.g. "ó" -> "&#243;"), while leaving Polish Extended-A letters
-        // like "ł" or "ż" untouched. Decoding first checks the real content instead of tying
-        // the assertion to that encoder's selective, framework-level quirk.
+        // WebUtility.HtmlEncode numerically escapes the entire U+00A0-U+00FF range (e.g.
+        // "ó" -> "&#243;"). "ó"/"Ó" are the only Polish letters that fall in that range; every
+        // other Polish diacritic (ł, ą, ę, ś, ż, ź, ć, ń) sits in Latin Extended-A at U+0100 or
+        // above and passes through untouched. Decoding first checks the real content instead of
+        // tying the assertion to that range boundary.
         var decodedBody = WebUtility.HtmlDecode(message.HtmlBody);
         Assert.Contains("Oddział wewnętrzny", decodedBody);
         Assert.Contains("Pacjent zgłosił ból po podaniu leku.", decodedBody);
