@@ -220,7 +220,10 @@ namespace SafeCare.Services
             // The 3-argument overload below pins the escape character to a single backslash so
             // that ESCAPE '\' is emitted instead, matching what ToContainsPattern assumes. This
             // relies on PostgreSQL's standard_conforming_strings being on, which is the default
-            // and what Npgsql sets on every connection.
+            // and what Npgsql sets on every connection. Every pattern passed to ILike below
+            // must come from ToContainsPattern — that escaping is what keeps a literal % or _
+            // in user input from being interpreted as a wildcard, so the pairing is load-bearing
+            // for correctness, not just style.
             if (request.Filter.FullName is not null)
             {
                 var pattern = ToContainsPattern(request.Filter.FullName);
