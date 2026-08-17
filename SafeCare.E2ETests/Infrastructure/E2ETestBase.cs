@@ -3,7 +3,7 @@
 namespace SafeCare.E2ETests.Infrastructure;
 
 [Collection(AppCollection.Name)]
-public abstract class E2ETestBase(AppFixture fixture)
+public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
 {
     /// <summary>
     /// The public form refuses anything submitted sooner than this after loading — it is a
@@ -11,8 +11,23 @@ public abstract class E2ETestBase(AppFixture fixture)
     /// </summary>
     protected static readonly TimeSpan MinimumFormFillTime = TimeSpan.FromSeconds(6);
 
+    private readonly List<IBrowserContext> _tracedContexts = [];
+
     protected AppFixture Fixture { get; } = fixture;
 
+    /// <summary>
+    /// Opens a fresh browser context and page, with Playwright tracing (screenshots +
+    /// DOM snapshots + sources) running on the context from the start. The trace is exported
+    /// when this test instance is disposed - see <see cref="DisposeAsync"/>.
+    ///
+    /// Tracing runs unconditionally for every context rather than only on failure: xUnit v3
+    /// gives a test class no clean way to learn its own outcome from inside
+    /// <c>IAsyncLifetime.DisposeAsync</c>, so "only trace failures" isn't something this
+    /// fixture can do without guesswork. The cost is bounded on the CI side instead - the
+    /// workflow's "Upload Playwright traces" step only runs `if: failure()`, so a green E2E
+    /// job never uploads anything; only a failing run's traces (for every test that ran in it,
+    /// not just the failing one) become an artifact. See .github/workflows/ci.yml.
+    /// </summary>
     protected async Task<IPage> NewPageAsync()
     {
         var context = await Fixture.Browser.NewContextAsync(new BrowserNewContextOptions
@@ -21,7 +36,43 @@ public abstract class E2ETestBase(AppFixture fixture)
             IgnoreHTTPSErrors = true
         });
 
+        await context.Tracing.StartAsync(new TracingStartOptions
+        {
+            Screenshots = true,
+            Snapshots = true,
+            Sources = true
+        });
+
+        _tracedContexts.Add(context);
+
         return await context.NewPageAsync();
+    }
+
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    /// <summary>
+    /// Stops tracing for every context this test opened and exports each one to
+    /// <c>playwright-traces/</c> under the test binaries - the exact directory
+    /// .github/workflows/ci.yml uploads from. Each file name is suffixed with a fresh GUID so
+    /// that concurrent tests, and a single test that calls <see cref="NewPageAsync"/> more than
+    /// once, never overwrite one another's trace.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_tracedContexts.Count == 0)
+        {
+            return;
+        }
+
+        var tracesDir = Path.Combine(AppContext.BaseDirectory, "playwright-traces");
+        Directory.CreateDirectory(tracesDir);
+
+        foreach (var context in _tracedContexts)
+        {
+            var tracePath = Path.Combine(tracesDir, $"{GetType().Name}-{Guid.NewGuid():N}.zip");
+            await context.Tracing.StopAsync(new TracingStopOptions { Path = tracePath });
+            await context.CloseAsync();
+        }
     }
 
     /// <summary>

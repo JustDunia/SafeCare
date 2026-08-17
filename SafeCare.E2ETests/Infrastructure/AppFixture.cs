@@ -28,6 +28,7 @@ public sealed class AppFixture : IAsyncLifetime
 
     private Process? _app;
     private IPlaywright? _playwright;
+    private bool _disposed;
 
     public string BaseUrl { get; private set; } = "";
 
@@ -41,24 +42,46 @@ public sealed class AppFixture : IAsyncLifetime
     {
         await Task.WhenAll(_database.StartAsync(), _mailpit.StartAsync());
 
-        DbOptions = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_database.GetConnectionString())
-            .Options;
+        try
+        {
+            DbOptions = new DbContextOptionsBuilder<AppDbContext>()
+                .UseNpgsql(_database.GetConnectionString())
+                .Options;
 
-        MailPitApiUrl = $"http://{_mailpit.Hostname}:{_mailpit.GetMappedPublicPort(8025)}";
+            MailPitApiUrl = $"http://{_mailpit.Hostname}:{_mailpit.GetMappedPublicPort(8025)}";
 
-        var port = FreeTcpPort();
-        BaseUrl = $"http://127.0.0.1:{port}";
+            var port = FreeTcpPort();
+            BaseUrl = $"http://127.0.0.1:{port}";
 
-        StartApplication(port);
-        await WaitUntilReadyAsync();
+            StartApplication(port);
+            await WaitUntilReadyAsync();
 
-        _playwright = await Playwright.CreateAsync();
-        Browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
+            _playwright = await Playwright.CreateAsync();
+            Browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
+        }
+        catch
+        {
+            // The containers above already started successfully. xUnit is not guaranteed to
+            // call DisposeAsync when InitializeAsync throws, so run the same teardown here
+            // before rethrowing - otherwise both containers (and, if it got that far, the
+            // application process) leak on a CI runner. DisposeAsync is idempotent, so this
+            // is safe even if xUnit does end up calling it again afterwards. `throw;` (not
+            // `throw ex;`) preserves the original exception - including, for a boot failure,
+            // the application's stderr captured by WaitUntilReadyAsync - untouched.
+            await DisposeAsync();
+            throw;
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
         if (Browser is not null)
         {
             await Browser.CloseAsync();

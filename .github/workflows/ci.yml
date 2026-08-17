@@ -94,10 +94,18 @@ jobs:
         run: dotnet test SafeCare.E2ETests/SafeCare.E2ETests.csproj -c Release --no-build
 
       - name: Upload Playwright traces
-        # Without these a browser failure on someone else's machine is guesswork.
+        # E2ETestBase starts a trace on every browser context it opens (see
+        # SafeCare.E2ETests/Infrastructure/E2ETestBase.cs) and exports it to this exact
+        # directory when the test instance is disposed, so the files below always exist once
+        # any E2E test has run. Without these a browser failure on someone else's machine is
+        # guesswork. This step still only fires when the run failed, so a green job never
+        # uploads anything - if-no-files-found is "warn" rather than "ignore" because on a
+        # failing run the directory should never actually be empty; a warning surfaces the
+        # rare case (e.g. the test host crashing before a trace could be exported) instead of
+        # going quiet about it again.
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
           path: SafeCare.E2ETests/bin/Release/net10.0/playwright-traces
-          if-no-files-found: ignore
+          if-no-files-found: warn
