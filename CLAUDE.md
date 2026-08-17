@@ -50,7 +50,9 @@ Fast suite only, no Docker needed:
 dotnet test SafeCare.Tests/SafeCare.Tests.csproj -- --filter-not-trait "Category=Integration"
 ```
 
-E2E needs the app built in Release and browsers installed once
+E2E needs the app published in Release (`dotnet publish SafeCare/SafeCare.csproj -c Release`
+— plain `dotnet build` does not create the `publish/` output the fixture launches) and
+browsers installed once
 (`pwsh SafeCare.E2ETests/bin/Release/net10.0/playwright.ps1 install chromium`).
 
 Integration tests use a real PostgreSQL because `GetReports` filters through

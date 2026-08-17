@@ -157,10 +157,11 @@ Unit tests only, no Docker needed:
 dotnet test SafeCare.Tests/SafeCare.Tests.csproj -- --filter-not-trait "Category=Integration"
 ```
 
-E2E tests require the application built in the Release configuration:
+E2E tests require the application published in the Release configuration (`dotnet build`
+alone does not create the `publish/` output the test fixture launches):
 
 ```bash
-dotnet build SafeCare.slnx -c Release
+dotnet publish SafeCare/SafeCare.csproj -c Release
 ```
 
 ```bash
@@ -168,7 +169,7 @@ pwsh SafeCare.E2ETests/bin/Release/net10.0/playwright.ps1 install chromium
 ```
 
 ```bash
-dotnet test SafeCare.E2ETests/SafeCare.E2ETests.csproj
+dotnet test SafeCare.E2ETests/SafeCare.E2ETests.csproj -c Release
 ```
 
 Every push and pull request to `main` runs both suites in GitHub Actions.
