@@ -33,3 +33,10 @@ csharp_style_var_for_built_in_types = false:none
 csharp_style_var_when_type_is_apparent = true:suggestion
 csharp_prefer_braces = true:suggestion
 dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
+
+# xUnit1051 wants a CancellationToken threaded through every async test call. Adopting that
+# across the whole test suite is a separate, project-wide decision - not something to force
+# through the CI format gate one file at a time. Silenced rather than left at its default
+# warning so the format-check step (run at --severity warn) stays clean and can still catch
+# genuinely new analyzer warnings.
+dotnet_diagnostic.xUnit1051.severity = none
