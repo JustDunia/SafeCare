@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Net.Sockets;
+using System.Text;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Microsoft.EntityFrameworkCore;
@@ -20,11 +21,19 @@ public sealed class AppFixture : IAsyncLifetime
         .Build();
 
     private readonly IContainer _mailpit = new ContainerBuilder()
-        .WithImage("axllent/mailpit:latest")
+        .WithImage("axllent/mailpit:v1.22.0")
         .WithPortBinding(1025, assignRandomHostPort: true)
         .WithPortBinding(8025, assignRandomHostPort: true)
         .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(8025))
         .Build();
+
+    // Accumulates the application's stdout and stderr as they are drained asynchronously
+    // (see StartApplication). Used both to keep the OS pipe from filling up and blocking the
+    // process (RedirectStandardOutput/Error with no reader deadlocks once the 4-64 KB buffer
+    // fills) and to surface Serilog's Console-sink output - including Log.Fatal from
+    // Program.cs's startup catch block, which never reaches stderr - when startup fails.
+    private readonly StringBuilder _appOutput = new();
+    private readonly object _appOutputLock = new();
 
     private Process? _app;
     private IPlaywright? _playwright;
@@ -40,10 +49,10 @@ public sealed class AppFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await Task.WhenAll(_database.StartAsync(), _mailpit.StartAsync());
-
         try
         {
+            await Task.WhenAll(_database.StartAsync(), _mailpit.StartAsync());
+
             DbOptions = new DbContextOptionsBuilder<AppDbContext>()
                 .UseNpgsql(_database.GetConnectionString())
                 .Options;
@@ -61,13 +70,16 @@ public sealed class AppFixture : IAsyncLifetime
         }
         catch
         {
-            // The containers above already started successfully. xUnit is not guaranteed to
-            // call DisposeAsync when InitializeAsync throws, so run the same teardown here
-            // before rethrowing - otherwise both containers (and, if it got that far, the
-            // application process) leak on a CI runner. DisposeAsync is idempotent, so this
-            // is safe even if xUnit does end up calling it again afterwards. `throw;` (not
-            // `throw ex;`) preserves the original exception - including, for a boot failure,
-            // the application's stderr captured by WaitUntilReadyAsync - untouched.
+            // Either or both containers, and possibly the application process, may already be
+            // running by the time any step here throws - e.g. Postgres starts cleanly but
+            // MailPit fails, or the app never becomes ready. xUnit is not guaranteed to call
+            // DisposeAsync when InitializeAsync throws, so run the same teardown here before
+            // rethrowing - otherwise whatever did start leaks on a CI runner. DisposeAsync
+            // tears down both containers and the app process unconditionally and is
+            // idempotent, so this is safe even if xUnit does end up calling it again
+            // afterwards. `throw;` (not `throw ex;`) preserves the original exception -
+            // including, for a boot failure, the application's captured stdout/stderr that
+            // WaitUntilReadyAsync embeds in its exception message - untouched.
             await DisposeAsync();
             throw;
         }
@@ -152,6 +164,39 @@ public sealed class AppFixture : IAsyncLifetime
 
         _app = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start the SafeCare process");
+
+        // Drain stdout/stderr asynchronously via event handlers rather than reading them
+        // later with ReadToEndAsync. Serilog's Console sink writes to stdout, and once the OS
+        // pipe buffer fills (4 KB on Windows, 64 KB on Linux) an unread pipe makes the child
+        // process block on its next write - hanging the whole E2E run until the job timeout.
+        // Accumulating both streams here also means WaitUntilReadyAsync has something to show
+        // on a boot failure: Program.cs's startup catch reports fatal errors via Log.Fatal,
+        // which goes to the Console sink (stdout), so stderr alone is normally empty.
+        _app.OutputDataReceived += (_, e) => AppendAppOutput(e.Data);
+        _app.ErrorDataReceived += (_, e) => AppendAppOutput(e.Data);
+        _app.BeginOutputReadLine();
+        _app.BeginErrorReadLine();
+    }
+
+    private void AppendAppOutput(string? line)
+    {
+        if (line is null)
+        {
+            return;
+        }
+
+        lock (_appOutputLock)
+        {
+            _appOutput.AppendLine(line);
+        }
+    }
+
+    private string CapturedAppOutput()
+    {
+        lock (_appOutputLock)
+        {
+            return _appOutput.ToString();
+        }
     }
 
     /// <summary>
@@ -167,8 +212,8 @@ public sealed class AppFixture : IAsyncLifetime
         {
             if (_app is { HasExited: true })
             {
-                var output = await _app.StandardError.ReadToEndAsync();
-                throw new InvalidOperationException($"SafeCare exited during startup: {output}");
+                throw new InvalidOperationException(
+                    $"SafeCare exited during startup (exit code {_app.ExitCode}): {CapturedAppOutput()}");
             }
 
             try
@@ -183,11 +228,17 @@ public sealed class AppFixture : IAsyncLifetime
             {
                 // not listening yet
             }
+            catch (TaskCanceledException)
+            {
+                // the 5-second HttpClient timeout tripped on a slow first response - keep
+                // retrying instead of aborting the whole fixture.
+            }
 
             await Task.Delay(500);
         }
 
-        throw new TimeoutException($"SafeCare did not become ready at {BaseUrl}");
+        throw new TimeoutException(
+            $"SafeCare did not become ready at {BaseUrl}. Captured output: {CapturedAppOutput()}");
     }
 }
 
