@@ -7,9 +7,10 @@ public class IncidentReportTests
     [Fact]
     public void AcceptsAnExactPointInTime()
     {
-        var report = ReportFactory.Create(date: DateTime.Now.AddHours(-3));
+        var date = DateTime.Now.AddHours(-3);
+        var report = ReportFactory.Create(date: date);
 
-        Assert.NotNull(report.Date);
+        Assert.Equal(date, report.Date);
         Assert.Null(report.DateFrom);
     }
 

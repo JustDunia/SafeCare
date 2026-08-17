@@ -25,17 +25,21 @@ public class BotDetectionServiceTests
     }
 
     [Fact]
-    public void RejectsSubmissionFasterThanMinimumFillTime()
+    public void RejectsSubmissionJustBelowTheFillTimeThreshold()
     {
-        var data = HumanLikeData() with { FormLoadedAt = DateTime.UtcNow.AddSeconds(-1) };
+        var data = HumanLikeData() with { FormLoadedAt = DateTime.UtcNow.AddSeconds(-4.999) };
 
         Assert.False(CreateSut().ValidateSubmission(data));
     }
 
     [Fact]
-    public void AcceptsSubmissionExactlyAtTheFillTimeBoundary()
+    public void AcceptsSubmissionJustPastTheFillTimeThreshold()
     {
-        var data = HumanLikeData() with { FormLoadedAt = DateTime.UtcNow.AddSeconds(-6) };
+        // -6s (the original value) sat nowhere near the 5-second threshold, so paired with
+        // the -1s reject case it only pinned the boundary to the open interval (1s, 6s] -
+        // it could drift to, say, 2s or 6s and neither test would notice. This value sits
+        // just past the threshold instead, so the two tests together pin it tightly.
+        var data = HumanLikeData() with { FormLoadedAt = DateTime.UtcNow.AddSeconds(-5.001) };
 
         Assert.True(CreateSut().ValidateSubmission(data));
     }

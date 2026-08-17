@@ -213,10 +213,17 @@ public class IncidentRegistrationFormValidatorTests
     public void RejectsAnEventTimedLaterToday()
     {
         // A date-only comparison would let this through: the date is today, but the clock
-        // time has not arrived yet.
+        // time has not arrived yet. The candidate time is clamped to 23:59 whenever adding
+        // the buffer would roll into tomorrow, so this test is deterministic at any time of
+        // day - an unclamped "+2h" crosses midnight between 22:00 and 23:59, turning "later
+        // today" into "earlier today" and failing the assertion.
         var form = MinimalValidForm();
+        var now = DateTime.Now;
+        var candidate = now.AddMinutes(2);
+        var laterToday = candidate.Date == now.Date ? candidate : now.Date.AddHours(23).AddMinutes(59);
+
         form.Date = DateTime.Today;
-        form.Time = DateTime.Now.AddHours(2).ToString("HH:mm");
+        form.Time = laterToday.ToString("HH:mm");
 
         Assert.True(HasErrorFor(_sut.Validate(form), "Time"));
     }

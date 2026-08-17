@@ -5,7 +5,11 @@ namespace SafeCare.Tests.Unit;
 /// <summary>
 /// Guards against source files being saved in a single-byte codepage. Windows-1250 bytes are
 /// valid on disk but decode as replacement characters when the compiler reads them as UTF-8,
-/// which once silently broke every Polish label on the public form.
+/// which once silently broke every Polish label on the public form. Also scans
+/// <c>Data/SeedData.sql</c>: it is read with a replacement-fallback <see cref="StreamReader"/>
+/// (not throw-on-invalid) in <c>DbSeeder</c> and its Polish text goes straight into the
+/// database, so a Windows-1250 save there would reproduce the same mojibake silently instead
+/// of failing loudly.
 /// </summary>
 public class SourceEncodingTests
 {
@@ -29,7 +33,7 @@ public class SourceEncodingTests
 
         foreach (var file in root.EnumerateFiles("*.*", SearchOption.AllDirectories))
         {
-            if (file.Extension is not (".cs" or ".razor"))
+            if (file.Extension is not (".cs" or ".razor" or ".sql"))
             {
                 continue;
             }

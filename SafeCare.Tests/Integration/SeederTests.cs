@@ -16,7 +16,10 @@ public class SeederTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 
         await DbSeeder.SeedAsync(db);
 
-        Assert.True(await db.Departments.AnyAsync());
+        // A specific, known department name from SeedData.sql rather than just "some row
+        // exists" - a stronger check that the actual seed content, not merely a row count,
+        // made it into the database.
+        Assert.True(await db.Departments.AnyAsync(d => d.Name == "Ortopedia"));
         Assert.True(await db.IncidentDefinitions.AnyAsync());
     }
 
