@@ -1,0 +1,135 @@
+﻿using System.Text.RegularExpressions;
+using System.Web;
+using Microsoft.Playwright;
+using SafeCare.E2ETests.Infrastructure;
+using static Microsoft.Playwright.Assertions;
+
+namespace SafeCare.E2ETests;
+
+public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
+{
+    // The seeded administrator's display name - see the HasData seed in User.cs.
+    private const string AdminDisplayName = "System Administrator";
+
+    [Fact]
+    public async Task SignsInWithValidCredentialsAndLandsOnTheDashboard()
+    {
+        var page = await NewPageAsync();
+
+        await LoginAsAdminAsync(page);
+
+        await Expect(page).ToHaveURLAsync(new Regex("/dashboard$"));
+        await Expect(page.GetByRole(AriaRole.Button, new() { Name = AdminDisplayName }).First).ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task RejectsInvalidCredentialsAndReturnsToLoginWithAnError()
+    {
+        var page = await NewPageAsync();
+        await page.GotoAsync("/login");
+
+        await SubmitLoginFormAsync(page, "admin", "ZleHaslo123!");
+
+        await Expect(page).ToHaveURLAsync(new Regex("/login\\?error=InvalidCredentials$"));
+        await Expect(page.GetByText("Nieprawidłowa nazwa użytkownika lub hasło.")).ToBeVisibleAsync();
+    }
+
+    [Theory]
+    [InlineData("/account", "Ustawienia konta")]
+    [InlineData("/details/5", "Zgłoszenie #5")]
+    public async Task SendsAnAnonymousVisitorToLoginAndBackToTheRequestedPage(string path, string heading)
+    {
+        // The returnUrl round trip has a sharp edge: /signin only accepts paths beginning with
+        // "/", while ToBaseRelativePath yields none. A regression there drops the redirect
+        // silently and the user lands on the dashboard instead.
+        var page = await NewPageAsync();
+
+        await page.GotoAsync(path);
+        await Expect(page).ToHaveURLAsync(new Regex("/login\\?"));
+
+        var query = HttpUtility.ParseQueryString(new Uri(page.Url).Query);
+        Assert.Equal(path, query["returnUrl"]);
+
+        await SubmitLoginFormAsync(page, "admin", "Admin123!");
+
+        await Expect(page).ToHaveURLAsync(new Regex(Regex.Escape(path) + "$"));
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = heading })).ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task IgnoresAReturnUrlPointingToAnotherSite()
+    {
+        // Otherwise the login form is an open redirect: a crafted link would forward a freshly
+        // authenticated user to a site of the attacker's choosing.
+        var page = await NewPageAsync();
+        await page.GotoAsync("/login?returnUrl=" + Uri.EscapeDataString("https://evil.example/phish"));
+
+        await SubmitLoginFormAsync(page, "admin", "Admin123!");
+
+        await Expect(page).ToHaveURLAsync(new Regex("/dashboard$"));
+        Assert.StartsWith(Fixture.BaseUrl, page.Url);
+    }
+
+    [Fact]
+    public async Task BlocksAnonymousAccessToTheDashboard()
+    {
+        var page = await NewPageAsync();
+
+        await page.GotoAsync("/dashboard");
+
+        await Expect(page).ToHaveURLAsync(new Regex("/login\\?"));
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Logowanie" })).ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task SkipsTheLoginPageForAnAlreadySignedInUser()
+    {
+        var page = await NewPageAsync();
+        await LoginAsAdminAsync(page);
+
+        await page.GotoAsync("/login");
+
+        await Expect(page).ToHaveURLAsync(new Regex("/dashboard$"));
+    }
+
+    [Fact]
+    public async Task EndsTheSessionOnSignOut()
+    {
+        var page = await NewPageAsync();
+        await LoginAsAdminAsync(page);
+
+        // Signing out is a form POST. The button that submits it lives in the user menu, which
+        // cannot currently be opened with the mouse (see OpensTheUserMenuWithAMouseClick), so
+        // the same POST is sent through the browser context, sharing the session cookie.
+        var response = await page.Context.APIRequest.PostAsync(
+            "/signout",
+            new() { MaxRedirects = 0 });
+
+        Assert.Equal(302, response.Status);
+        Assert.EndsWith("/login", response.Headers["location"]);
+
+        // The cookie is gone, so the protected page is out of reach again.
+        await page.GotoAsync("/dashboard");
+
+        await Expect(page).ToHaveURLAsync(new Regex("/login\\?"));
+    }
+
+    [Fact]
+    public async Task OpensTheUserMenuWithAMouseClick()
+    {
+        // KNOWN FAILURE - a production defect, not a test problem. Clicking the user menu's
+        // activator in MainLayout.razor opens nothing: reproduced in Playwright's Chromium and,
+        // by hand, in a regular browser, while other MudBlazor popups on the same page (the
+        // filter selects) open fine. The activator is a MudButton inside MudMenu's
+        // ActivatorContent, whose click handling MudButton is probably swallowing. Sign-out,
+        // account settings and user management all live in this menu.
+        var page = await NewPageAsync();
+        await LoginAsAdminAsync(page);
+        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { Has = page.GetByRole(AriaRole.Cell) }).First)
+            .ToBeVisibleAsync();
+
+        await page.GetByRole(AriaRole.Button, new() { Name = AdminDisplayName }).First.ClickAsync();
+
+        await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Wyloguj" })).ToBeVisibleAsync();
+    }
+}
