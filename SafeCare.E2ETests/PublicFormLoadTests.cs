@@ -16,7 +16,10 @@ public class PublicFormLoadTests(AppFixture fixture) : E2ETestBase(fixture)
 
         // Home.razor sets <PageTitle>Zgłoszenie zdarzenia</PageTitle>; App.razor has no
         // fallback <title>, so this is the exact rendered title, not just a substring check.
-        Assert.Equal("Zgłoszenie zdarzenia", await page.TitleAsync());
+        // Interactive Server rendering sets the title from JavaScript once the SignalR
+        // circuit connects, so a single TitleAsync() call can observe an empty title on a
+        // cold start. This assertion polls until the title arrives.
+        await Microsoft.Playwright.Assertions.Expect(page).ToHaveTitleAsync("Zgłoszenie zdarzenia");
     }
 
     [Fact]
