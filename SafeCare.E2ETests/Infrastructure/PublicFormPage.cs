@@ -44,9 +44,7 @@ public sealed class PublicFormPage(IPage page)
     public async Task WaitUntilInteractiveAsync()
     {
         await OpenDepartmentListAsync(ProbeDepartment);
-
-        await Page.Keyboard.PressAsync("Escape");
-        await Expect(OptionNamed(ProbeDepartment)).ToBeHiddenAsync();
+        await CloseDepartmentListAsync(ProbeDepartment);
     }
 
     /// <summary>
@@ -86,10 +84,10 @@ public sealed class PublicFormPage(IPage page)
     /// Types into one of the invisible honeypot fields, the way a form-filling bot would.
     /// </summary>
     public async Task FillHoneypotAsync(string fieldId, string value) =>
-        await Page.Locator($"#{fieldId}").FillAsync(value);
+        await FillAsync(Page.Locator($"#{fieldId}"), value);
 
     public async Task ClearHoneypotAsync(string fieldId) =>
-        await Page.Locator($"#{fieldId}").FillAsync("");
+        await FillAsync(Page.Locator($"#{fieldId}"), "");
 
     public async Task SubmitAsync() =>
         await Page.GetByRole(AriaRole.Button, new() { Name = "Wyślij", Exact = true }).ClickAsync();
@@ -145,6 +143,28 @@ public sealed class PublicFormPage(IPage page)
             {
                 // circuit not connected yet - click again
             }
+        }
+    }
+
+    /// <summary>
+    /// Closes the dropdown again. Escape is the natural way, but it has been seen to leave the
+    /// list open, so if it does, moving focus away with a click on plain page text finishes the
+    /// job.
+    /// </summary>
+    private async Task CloseDepartmentListAsync(string department)
+    {
+        var option = OptionNamed(department);
+
+        await Page.Keyboard.PressAsync("Escape");
+
+        try
+        {
+            await Expect(option).ToBeHiddenAsync(new() { Timeout = 2_000 });
+        }
+        catch (PlaywrightException)
+        {
+            await Page.GetByText("Zgłoszenie zdarzenia niepożądanego").ClickAsync();
+            await Expect(option).ToBeHiddenAsync();
         }
     }
 
