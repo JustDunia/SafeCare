@@ -98,6 +98,11 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
         var page = await NewPageAsync();
         await LoginAsAdminAsync(page);
 
+        // Let the dashboard finish loading first: navigating away while it is still starting up
+        // can abort the follow-up navigation below.
+        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { Has = page.GetByRole(AriaRole.Cell) }).First)
+            .ToBeVisibleAsync();
+
         // Signing out is a form POST. The button that submits it lives in the user menu, which
         // cannot currently be opened with the mouse (see OpensTheUserMenuWithAMouseClick), so
         // the same POST is sent through the browser context, sharing the session cookie.
@@ -108,10 +113,12 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
         Assert.Equal(302, response.Status);
         Assert.EndsWith("/login", response.Headers["location"]);
 
-        // The cookie is gone, so the protected page is out of reach again.
-        await page.GotoAsync("/dashboard");
+        // The cookie is gone, so the protected page is out of reach again. A fresh page in the
+        // same context asks the server afresh, unaffected by the old page's live circuit.
+        var afterSignOut = await page.Context.NewPageAsync();
+        await afterSignOut.GotoAsync("/dashboard");
 
-        await Expect(page).ToHaveURLAsync(new Regex("/login\\?"));
+        await Expect(afterSignOut).ToHaveURLAsync(new Regex("/login\\?"));
     }
 
     [Fact]

@@ -116,6 +116,10 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
         await page.GotoAsync("/login");
         await SubmitLoginFormAsync(page, "admin", "Admin123!");
         await page.WaitForURLAsync(url => !url.Contains("/login"));
+
+        // The URL changes as soon as the redirect is followed. A caller that navigates again
+        // immediately can have that navigation aborted (ERR_ABORTED) by the page still loading.
+        await page.WaitForLoadStateAsync(LoadState.Load);
     }
 
     /// <summary>
