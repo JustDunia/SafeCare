@@ -89,15 +89,48 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
     protected async Task LoginAsAdminAsync(IPage page)
     {
         await page.GotoAsync("/login");
-        await page.FillAsync("input[autocomplete='username']", "admin");
-        await page.FillAsync("input[autocomplete='current-password']", "Admin123!");
+        await SubmitLoginFormAsync(page, "admin", "Admin123!");
+        await page.WaitForURLAsync(url => !url.Contains("/login"));
+    }
 
-        await page.WaitForFunctionAsync("""
-            () => document.querySelector('input[name="userName"]')?.value === 'admin'
-                && document.querySelector('input[name="password"]')?.value === 'Admin123!'
-            """);
+    /// <summary>
+    /// Fills the login form that is already open and submits it, without waiting for the
+    /// outcome — callers decide what to expect (a redirect away, or an error on /login).
+    ///
+    /// The form is prerendered and only becomes interactive once the SignalR circuit connects,
+    /// which happens after <c>GotoAsync</c> has already returned. Typing before that moment
+    /// changes the DOM but never reaches the server-side model, so the hidden inputs the POST
+    /// actually reads stay empty and a plain "fill, then wait" hangs until its timeout — this
+    /// flaked roughly one run in three. Filling is therefore retried until the hidden inputs
+    /// confirm the circuit picked the values up.
+    /// </summary>
+    protected static async Task SubmitLoginFormAsync(IPage page, string userName, string password)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+
+        while (true)
+        {
+            await page.FillAsync("input[autocomplete='username']", userName);
+            await page.FillAsync("input[autocomplete='current-password']", password);
+
+            try
+            {
+                await page.WaitForFunctionAsync(
+                    """
+                    ([user, pass]) =>
+                        document.querySelector('input[name="userName"]')?.value === user
+                        && document.querySelector('input[name="password"]')?.value === pass
+                    """,
+                    new[] { userName, password },
+                    new PageWaitForFunctionOptions { Timeout = 2_000 });
+                break;
+            }
+            catch (TimeoutException) when (DateTime.UtcNow < deadline)
+            {
+                // circuit not connected yet - type again
+            }
+        }
 
         await page.ClickAsync("form button[type='submit']");
-        await page.WaitForURLAsync(url => !url.Contains("/login"));
     }
 }
