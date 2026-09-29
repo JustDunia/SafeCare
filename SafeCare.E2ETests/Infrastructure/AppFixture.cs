@@ -162,6 +162,14 @@ public sealed class AppFixture : IAsyncLifetime
         startInfo.Environment["Email__Smtp__UseSsl"] = "false";
         startInfo.Environment["Email__Smtp__AuthMode"] = "None";
 
+        // The application rate-limits every HTTP request - static assets and the SignalR
+        // handshake included - to 100 per minute per client IP, which is only a handful of
+        // page loads. All browser contexts here connect from 127.0.0.1, so a full run would
+        // share one budget and start receiving 429s. Honouring X-Forwarded-For (trusted from
+        // loopback only, which is where the browser connects from) lets E2ETestBase give each
+        // browser context an address of its own, exactly as separate visitors would have.
+        startInfo.Environment["ASPNETCORE_FORWARDEDHEADERS_ENABLED"] = "true";
+
         _app = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start the SafeCare process");
 

@@ -11,6 +11,9 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
     /// </summary>
     protected static readonly TimeSpan MinimumFormFillTime = TimeSpan.FromSeconds(6);
 
+    // Source of distinct client addresses; see NewPageAsync.
+    private static int _clientAddressCounter;
+
     private readonly List<IBrowserContext> _tracedContexts = [];
 
     protected AppFixture Fixture { get; } = fixture;
@@ -36,6 +39,22 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
             IgnoreHTTPSErrors = true
         });
 
+        // Gives this context its own client address for the application's per-IP rate limiter
+        // (see AppFixture.StartApplication), so tests cannot exhaust one another's budget of
+        // requests. Only requests to the application get the header: sent to third parties, such
+        // as the Google Fonts host, it would turn simple requests into CORS preflights and fail.
+        var clientAddress = NextClientAddress();
+        await context.RouteAsync(
+            url => url.StartsWith(Fixture.BaseUrl, StringComparison.Ordinal),
+            async route =>
+            {
+                var headers = new Dictionary<string, string>(route.Request.Headers)
+                {
+                    ["x-forwarded-for"] = clientAddress
+                };
+                await route.ContinueAsync(new RouteContinueOptions { Headers = headers });
+            });
+
         await context.Tracing.StartAsync(new TracingStartOptions
         {
             Screenshots = true,
@@ -46,6 +65,12 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
         _tracedContexts.Add(context);
 
         return await context.NewPageAsync();
+    }
+
+    private static string NextClientAddress()
+    {
+        var n = Interlocked.Increment(ref _clientAddressCounter);
+        return $"10.{(n >> 16) & 255}.{(n >> 8) & 255}.{n & 255}";
     }
 
     public ValueTask InitializeAsync() => ValueTask.CompletedTask;
