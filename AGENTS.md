@@ -40,7 +40,7 @@ SafeCare/                          # Solution root
       IdentitySeeder.cs            # Creates roles, ensures admin holds the Admin role
       Entities/                    # IncidentReport, IncidentDefinition, Department, User, AppRoles
       Migrations/                  # 4 EF Core migrations (code-first)
-      SeedData.sql                 # <EmbeddedResource>, dictionaries + ~200 demo reports
+      SeedData.sql                 # <EmbeddedResource>, dictionaries only (no reports)
     Services/                      # Interface + implementation pairs
     Email/                         # Dual provider (SMTP/Graph), background queue, retry
     Dtos/                          # Service-layer data transfer objects

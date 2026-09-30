@@ -87,7 +87,9 @@ The `admin` account is seeded through EF `HasData` in [User.cs](SafeCare/Data/En
 
 `AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>` with `ApplyConfigurationsFromAssembly`. Each entity file also contains its `IEntityTypeConfiguration<T>` class — keep that pairing. Domain entities: `IncidentReport` (M:N `IncidentDefinition`, N:1 `Department`).
 
-Dictionary data and ~200 demo reports come from `Data/SeedData.sql`, an `<EmbeddedResource>` read by reflection and run only when `Departments` is empty.
+Dictionary data — departments and incident definitions — comes from `Data/SeedData.sql`, an `<EmbeddedResource>` read by reflection and run only when `Departments` is empty. It seeds **no** reports: the demo reports it used to carry were temporary and have been removed.
+
+Do not reintroduce seeded rows with explicit `"Id"` values into a table the application also writes to. PostgreSQL does not advance an identity sequence when an id is supplied, so the seeded rows and the application's own first insert collide on the same id. That is exactly what the demo reports did — on a freshly seeded database the public form rejected every submission with a duplicate key violation until the sequence caught up. The E2E suite caught it.
 
 ### Email
 

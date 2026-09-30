@@ -114,9 +114,10 @@ dotnet run --project SafeCare
 
 The application listens on `http://localhost:5288` and `https://localhost:7163`.
 
-Migrations are applied automatically on startup, and dictionary data plus roughly 200 demo
-reports are seeded on first run, so `dotnet ef database update` is normally unnecessary. A
-fresh clone needs nothing beyond a reachable PostgreSQL instance.
+Migrations are applied automatically on startup, and the dictionary data the form depends on
+— departments and incident definitions — is seeded on first run, so `dotnet ef database
+update` is normally unnecessary. A fresh clone needs nothing beyond a reachable PostgreSQL
+instance. No reports are seeded: the dashboard starts empty and fills as reports arrive.
 
 ### 2.4. E-mail in development
 
