@@ -120,7 +120,22 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
         // The URL changes as soon as the redirect is followed. A caller that navigates again
         // immediately can have that navigation aborted (ERR_ABORTED) by the page still loading.
         await page.WaitForLoadStateAsync(LoadState.Load);
+
+        // The landing page arrives prerendered, and MainLayout's AuthorizeView only renders the
+        // signed-in toolbar once the SignalR circuit has attached. Returning before that leaves
+        // callers asserting against a page whose authenticated chrome does not exist yet, which
+        // failed intermittently under container load. Waiting here — rather than in each test —
+        // means every caller receives a page that is genuinely signed in and interactive.
+        // The timeout is deliberately generous: circuit attach competes with container startup.
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = SignedInUserName }).First)
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
     }
+
+    /// <summary>
+    /// Display name the seeded administrator's toolbar button carries, from the HasData seed
+    /// in User.cs. Used to detect that the signed-in layout has finished rendering.
+    /// </summary>
+    private const string SignedInUserName = "System Administrator";
 
     /// <summary>
     /// Fills the login form that is already open and submits it, without waiting for the
