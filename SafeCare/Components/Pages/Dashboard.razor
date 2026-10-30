@@ -146,7 +146,15 @@
 
     private void ShowDetails(int id)
     {
-        NavigationManager.NavigateTo($"/details/{id}");
+        // Hand the report the address of the list it is being opened from, so it can offer a
+        // way back with the filters still applied. UpdateQueryParameters has already written
+        // the current state into that address. ToBaseRelativePath returns no leading slash.
+        var listUrl = "/" + NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var detailsUrl = NavigationManager.GetUriWithQueryParameters(
+            $"/details/{id}",
+            new Dictionary<string, object?> { ["list"] = listUrl });
+
+        NavigationManager.NavigateTo(detailsUrl);
     }
 
     private void InitializeFiltersFromQuery()

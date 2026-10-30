@@ -158,10 +158,32 @@ public class DashboardTests(AppFixture fixture) : E2ETestBase(fixture)
         // A single click is reserved for selecting text; only a double click opens the report.
         await row.DblClickAsync();
 
-        await Expect(page).ToHaveURLAsync(new Regex($"/details/{id}$"));
+        // The report's own address, with or without the return link the grid appends to it.
+        await Expect(page).ToHaveURLAsync(new Regex($@"/details/{id}(\?|$)"));
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = $"Zgłoszenie #{id}" })).ToBeVisibleAsync();
 
         // The details belong to the row that was clicked, not merely to some report.
         await Expect(page.GetByText(department, new() { Exact = true })).ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task ReturnsFromAReportToTheListStillFiltered()
+    {
+        const string department = "Chirurgia";
+        await SeedReportsAsync(2, department);
+
+        var page = await OpenDashboardAsync($"?department={department}");
+        var filteredCaption = await PagerCaption(page).InnerTextAsync();
+
+        await DataRows(page).First.DblClickAsync();
+        await Expect(page).ToHaveURLAsync(new Regex(@"/details/\d+"));
+
+        await page.GetByRole(AriaRole.Link, new() { Name = "Powrót do listy" }).ClickAsync();
+
+        // Filtering survives the round trip: the address carries it, the input shows it, and
+        // the grid reports the same total it did before the report was opened.
+        await Expect(page).ToHaveURLAsync(new Regex($"department={department}"));
+        await Expect(page.GetByLabel("Oddział")).ToHaveValueAsync(department);
+        await Expect(PagerCaption(page)).ToHaveTextAsync(filteredCaption);
     }
 }

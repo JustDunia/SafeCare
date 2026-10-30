@@ -8,13 +8,18 @@
 @attribute [Authorize]
 @inject IIncidentReportService IncidentReportService
 @inject ISnackbar Snackbar
-@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 
 <PageTitle>Zgłoszenie #@Id</PageTitle>
 
 <MudStack Class="mt-4 gap-5">
-    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudButton Href="@BackUrl"
+                   Variant="Variant.Text"
+                   StartIcon="@Icons.Material.Filled.ArrowBack">
+            Powrót do listy
+        </MudButton>
         <MudItem>
             <MudText Typo="Typo.h4">Zgłoszenie #@Id</MudText>
             <MudText Typo="Typo.subtitle1">Data zgłoszenia: @model.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
@@ -26,7 +31,7 @@
                     <MudMenu Dense Label="Zmień status" AnchorOrigin="Origin.TopRight">
                         @foreach (var status in Enum.GetValues<ReportStatus>())
                         {
-                            <MudMenuItem Label="@status.GetDisplayName()" Disabled="@(status == model.Status)" OnClick="()=>UpdateStatus(status)" />
+                            <MudMenuItem Label="@status.GetDisplayName()" Disabled="@(status == model.Status)" OnClick="() => UpdateStatus(status)" />
                         }
                     </MudMenu>
                     <MudMenuItem Label="Usuń" OnClick="OpenDialogAsync" />
@@ -158,6 +163,25 @@
     [Parameter]
     public int Id { get; set; }
 
+    /// <summary>
+    /// The address of the list this report was opened from, put there by the dashboard so the
+    /// filters survive the trip. Absent when the report was reached directly — a pasted link
+    /// or a bookmark carries no list address.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "list")]
+    public string? ListQuery { get; set; }
+
+    /// <summary>
+    /// Where "Powrót do listy" leads: that remembered list, or the unfiltered dashboard when
+    /// there is none. Only a relative path under /dashboard is accepted, so a crafted
+    /// ?list=https://evil cannot turn the button into an open redirect — the same guard
+    /// /signin applies to its returnUrl.
+    /// </summary>
+    private string BackUrl =>
+        ListQuery == "/dashboard" || ListQuery?.StartsWith("/dashboard?", StringComparison.Ordinal) == true
+            ? ListQuery
+            : "/dashboard";
+
     private IncidentReportDetails model = new();
     private string incidentDate = string.Empty;
     private Dictionary<string, List<string>> incidents = new();
@@ -214,7 +238,7 @@
         {
             await IncidentReportService.DeleteReport(Id);
             Snackbar.Add("Zgłoszenie zostało usunięte.", Severity.Success);
-            await GoBack();
+            GoBack();
         }
         catch (Exception ex)
         {
@@ -230,14 +254,12 @@
         var response = await DialogService.ShowAsync<ConfirmDialog>(string.Empty, options);
         var result = await response.Result;
 
-        if(result?.Data is true)
+        if (result?.Data is true)
         {
             await DeleteReport();
-        };
+        }
+        ;
     }
 
-    private async Task GoBack()
-    {
-        await JSRuntime.InvokeVoidAsync("history.back");
-    }
+    private void GoBack() => NavigationManager.NavigateTo(BackUrl);
 }
