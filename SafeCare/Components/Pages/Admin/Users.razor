@@ -1,4 +1,4 @@
-@page "/admin/users"
+﻿@page "/admin/users"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Identity
@@ -30,28 +30,30 @@
             <MudForm @ref="form" Model="model" Validation="@(validator.ValidateValue)">
                 <MudGrid>
                     <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="model.UserName" Label="Nazwa użytkownika" For="@(() => model.UserName)" />
+                        <MudTextField @bind-Value="model.UserName" Label="Nazwa użytkownika" For="@(() => model.UserName)" autocomplete="off" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="model.Email" Label="Adres e-mail" For="@(() => model.Email)" />
+                        <MudTextField @bind-Value="model.Email" Label="Adres e-mail" For="@(() => model.Email)" autocomplete="off" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="model.FirstName" Label="Imię" For="@(() => model.FirstName)" />
+                        <MudTextField @bind-Value="model.FirstName" Label="Imię" For="@(() => model.FirstName)" autocomplete="off" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="model.LastName" Label="Nazwisko" For="@(() => model.LastName)" />
+                        <MudTextField @bind-Value="model.LastName" Label="Nazwisko" For="@(() => model.LastName)" autocomplete="off" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="model.Password"
                                       Label="Hasło"
                                       InputType="InputType.Password"
-                                      For="@(() => model.Password)" />
+                                      For="@(() => model.Password)"
+                                      autocomplete="new-password" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="model.ConfirmPassword"
                                       Label="Potwierdź hasło"
                                       InputType="InputType.Password"
-                                      For="@(() => model.ConfirmPassword)" />
+                                      For="@(() => model.ConfirmPassword)"
+                                      autocomplete="new-password" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
                         <MudSelect @bind-Value="model.Role" Label="Rola" For="@(() => model.Role)">
