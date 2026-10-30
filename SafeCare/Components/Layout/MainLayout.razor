@@ -34,8 +34,17 @@
                             <MudMenuItem Href="/admin/users">Zarządzanie użytkownikami</MudMenuItem>
                         }
                         <MudMenuItem Href="/account">Ustawienia konta</MudMenuItem>
+                        @* Signing out has to be a browser form POST — a circuit cannot clear the
+                           auth cookie — so this item is a real submit button, not a MudMenuItem.
+                           It carries MudMenuItem's own classes so it matches the items above:
+                           mud-menu-item gives the layout and padding, mud-list-item-clickable the
+                           button reset and hover, mud-ripple the ripple (MudBlazor's delegated
+                           handler finds it with closest()), and MudText the typography a bare
+                           <button> would otherwise take from the user agent. *@
                         <form method="post" action="/signout" id="logoutForm">
-                            <button type="submit" style="width:100%">Wyloguj</button>
+                            <button type="submit" class="mud-menu-item mud-list-item-clickable mud-ripple">
+                                <MudText Class="mud-menu-item-text">Wyloguj</MudText>
+                            </button>
                         </form>
                     </ChildContent>
                 </MudMenu>
