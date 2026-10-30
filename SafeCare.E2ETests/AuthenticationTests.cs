@@ -103,9 +103,9 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
         await Expect(page.GetByRole(AriaRole.Row).Filter(new() { Has = page.GetByRole(AriaRole.Cell) }).First)
             .ToBeVisibleAsync();
 
-        // Signing out is a form POST. The button that submits it lives in the user menu, which
-        // cannot currently be opened with the mouse (see OpensTheUserMenuWithAMouseClick), so
-        // the same POST is sent through the browser context, sharing the session cookie.
+        // Signing out is a form POST. The button that submits it lives in the user menu, whose
+        // click path OpensTheUserMenuWithAMouseClick covers; this test is about the endpoint, so
+        // it sends the same POST through the browser context, sharing the session cookie.
         var response = await page.Context.APIRequest.PostAsync(
             "/signout",
             new() { MaxRedirects = 0 });
@@ -121,25 +121,9 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
         await Expect(afterSignOut).ToHaveURLAsync(new Regex("/login\\?"));
     }
 
-    [Fact(Skip = "Open production defect: the user menu does not open on click. " +
-                 "Remove this Skip once MainLayout's activator is fixed — the test is correct and should pass then.")]
+    [Fact]
     public async Task OpensTheUserMenuWithAMouseClick()
     {
-        // A production defect, not a test problem. Clicking the user menu's activator in
-        // MainLayout.razor opens nothing: reproduced in Playwright's Chromium and, by hand,
-        // in a regular browser, while other MudBlazor popups on the same page (the filter
-        // selects) open fine. The rendered ARIA tree shows a <button> nested inside another
-        // <button> — MudMenu wraps ActivatorContent in its own button, and the MudButton
-        // placed inside it produces a second one, which is invalid HTML and swallows the
-        // click. Replacing the inner MudButton with a non-interactive element was tried and
-        // did NOT fix it on its own, so the cause is not yet fully understood and the fix
-        // needs its own focused investigation rather than blind iteration.
-        //
-        // Impact: sign-out, account settings and user management all live in this menu and
-        // are unreachable with a mouse. Sign-out is worked around in the test above by
-        // posting to /signout directly, which is why that test still passes.
-        //
-        // Skipped rather than deleted so the defect stays visible in every test report.
         var page = await NewPageAsync();
         await LoginAsAdminAsync(page);
         await Expect(page.GetByRole(AriaRole.Row).Filter(new() { Has = page.GetByRole(AriaRole.Cell) }).First)

@@ -19,13 +19,15 @@
         <MudSpacer />
         <AuthorizeView>
             <Authorized Context="authContext">
-                <MudMenu AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter" >
-                    <ActivatorContent>
-                        <MudButton Color="Color.Inherit">
-                            <MudText Class="me-3">@firstName @lastName</MudText>
-                            <MudIcon Icon="@Icons.Material.Filled.Person" Class="white-text" />
-                        </MudButton>
-                    </ActivatorContent>
+                @* MudMenu attaches no click handler to an ActivatorContent wrapper — a custom
+                   activator has to call the MenuContext it receives. Using MudMenu's own button
+                   activator (Label + EndIcon) instead keeps click and keyboard handling inside
+                   the component and avoids nesting a <button> in the wrapper's role="button". *@
+                <MudMenu AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
+                         Label="@($"{firstName} {lastName}")"
+                         EndIcon="@Icons.Material.Filled.Person"
+                         Color="Color.Inherit"
+                         IconColor="Color.Inherit">
                     <ChildContent>
                         @if (isAdmin)
                         {
