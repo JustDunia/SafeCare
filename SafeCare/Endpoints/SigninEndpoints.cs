@@ -75,7 +75,10 @@ namespace SafeCare.Endpoints
         }
 
         /// <summary>
-        /// Handles <c>POST /signout</c>: clears the auth cookie and returns to the login page.
+        /// Handles <c>POST /signout</c>: clears the auth cookie and returns to the public
+        /// incident form at <c>/</c>, which is where a signed-out visitor belongs — the login
+        /// page is reached from there, and landing on it instead invites signing straight
+        /// back in.
         /// </summary>
         public static void MapSignOutEndpoint(this IEndpointRouteBuilder app)
         {
@@ -86,7 +89,7 @@ namespace SafeCare.Endpoints
 
                 Log.Information("User {UserName} signed out successfully", userName);
 
-                return Results.Redirect("/login");
+                return Results.Redirect("/");
             });
         }
     }

@@ -110,8 +110,9 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
             "/signout",
             new() { MaxRedirects = 0 });
 
+        // Signing out lands on the public incident form, not on the login page.
         Assert.Equal(302, response.Status);
-        Assert.EndsWith("/login", response.Headers["location"]);
+        Assert.Equal("/", response.Headers["location"]);
 
         // The cookie is gone, so the protected page is out of reach again. A fresh page in the
         // same context asks the server afresh, unaffected by the old page's live circuit.
