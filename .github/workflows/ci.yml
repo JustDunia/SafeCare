@@ -79,11 +79,6 @@ jobs:
     name: End-to-end tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # TEMPORARY: this job has never produced a green run - the E2E scenario tests (plan
-    # tasks 18-22) are not implemented yet, so there is nothing here to pass. Without
-    # continue-on-error, merging to main would be hard-gated on a job that cannot succeed.
-    # Remove this flag once those tasks land and the job has a green run.
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
