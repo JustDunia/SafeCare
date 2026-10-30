@@ -1,4 +1,5 @@
-﻿using Microsoft.Playwright;
+﻿using System.Text.RegularExpressions;
+using Microsoft.Playwright;
 
 namespace SafeCare.E2ETests.Infrastructure;
 
@@ -10,6 +11,16 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
     /// bot defence, not a delay to optimise away. Tests must wait it out.
     /// </summary>
     protected static readonly TimeSpan MinimumFormFillTime = TimeSpan.FromSeconds(6);
+
+    /// <summary>
+    /// The dashboard grid's pager caption, e.g. "1-25 z 40" — the grid's own statement of its
+    /// total. It renders whether or not any reports exist ("0-0 z 0" on an empty database),
+    /// which makes it the signal a test should wait on to know the grid has finished its first
+    /// load over the circuit. Waiting for a data row instead ties the test to seeded demo data
+    /// that no longer exists, or to whichever test happened to run first.
+    /// </summary>
+    protected static ILocator PagerCaption(IPage page) =>
+        page.GetByText(new Regex(@"^\d+-\d+ z \d+$"));
 
     // Source of distinct client addresses; see NewPageAsync.
     private static int _clientAddressCounter;

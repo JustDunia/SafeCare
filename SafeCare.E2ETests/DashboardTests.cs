@@ -34,10 +34,6 @@ public class DashboardTests(AppFixture fixture) : E2ETestBase(fixture)
     private static ILocator DataRows(IPage page) =>
         page.GetByRole(AriaRole.Row).Filter(new() { Has = page.GetByRole(AriaRole.Cell) });
 
-    /// <summary>The pager caption, e.g. "1-25 z 40"; the grid's own way of stating its total.</summary>
-    private static ILocator PagerCaption(IPage page) =>
-        page.GetByText(new Regex(@"^\d+-\d+ z \d+$"));
-
     private static async Task<int> TotalReportsAsync(IPage page)
     {
         var caption = await PagerCaption(page).InnerTextAsync();

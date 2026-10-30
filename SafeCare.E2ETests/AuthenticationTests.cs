@@ -99,9 +99,9 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
         await LoginAsAdminAsync(page);
 
         // Let the dashboard finish loading first: navigating away while it is still starting up
-        // can abort the follow-up navigation below.
-        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { Has = page.GetByRole(AriaRole.Cell) }).First)
-            .ToBeVisibleAsync();
+        // can abort the follow-up navigation below. The pager caption is the settled signal
+        // here, not a data row — this test creates no reports and the application seeds none.
+        await Expect(PagerCaption(page)).ToBeVisibleAsync();
 
         // Signing out is a form POST. The button that submits it lives in the user menu, whose
         // click path OpensTheUserMenuWithAMouseClick covers; this test is about the endpoint, so
@@ -126,8 +126,10 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
     {
         var page = await NewPageAsync();
         await LoginAsAdminAsync(page);
-        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { Has = page.GetByRole(AriaRole.Cell) }).First)
-            .ToBeVisibleAsync();
+
+        // Settle the dashboard before clicking, on a signal that does not assume any reports
+        // exist — see PagerCaption.
+        await Expect(PagerCaption(page)).ToBeVisibleAsync();
 
         await page.GetByRole(AriaRole.Button, new() { Name = AdminDisplayName }).First.ClickAsync();
 

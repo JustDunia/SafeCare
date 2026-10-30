@@ -14,7 +14,10 @@
 <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
-    <PackageReference Include="MailKit" Version="4.17.0" />
+    <!-- 4.18.2 is the first release whose MimeKit requires System.Security.Cryptography.Pkcs
+         10.0.13, the version that patches CVE-2026-84008 (high) and CVE-2026-70162. 4.17.0
+         pulled 10.0.0 transitively and tripped CI's vulnerable-package scan. -->
+    <PackageReference Include="MailKit" Version="4.18.2" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
