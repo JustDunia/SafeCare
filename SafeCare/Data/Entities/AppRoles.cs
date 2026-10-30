@@ -2,8 +2,8 @@ namespace SafeCare.Data.Entities;
 
 /// <summary>
 /// The role names used for authorization. Always reference these constants rather than
-/// repeating the literals, so that <c>[Authorize(Roles = ...)]</c> attributes and role lookups
-/// cannot drift apart.
+/// repeating the literals, so that authorization policies and role lookups cannot drift
+/// apart. Pages are guarded by policy, not by role — see <c>Utils.AuthPolicies</c>.
 /// </summary>
 public static class AppRoles
 {

@@ -1,0 +1,97 @@
+﻿@page "/login/2fa"
+@using Microsoft.AspNetCore.Components.Authorization
+@using SafeCare.Utils
+@inject NavigationManager NavigationManager
+
+<PageTitle>Weryfikacja dwuetapowa</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudCard Elevation="4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h4" Align="Align.Center">Weryfikacja dwuetapowa</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4">@ErrorMessage</MudAlert>
+            }
+            <MudText Typo="Typo.body1" Class="mb-4">
+                Otwórz aplikację Microsoft Authenticator i wpisz 6-cyfrowy kod wyświetlany dla konta SafeCare.
+            </MudText>
+            @* Posts to /signin-2fa for the same reason Login.razor posts to /signin: only a real
+               HTTP response can set the auth cookie. *@
+            <form method="post" action="/signin-2fa">
+                <AntiforgeryToken />
+                <MudTextField @bind-Value="twoFactorCode"
+                              Label="Kod z aplikacji"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Text"
+                              Class="mb-2"
+                              ShrinkLabel
+                              MaxLength="32"
+                              Immediate="true"
+                              autocomplete="one-time-code"
+                              HelperText="Nie masz dostępu do aplikacji? Wpisz tu jeden z kodów odzyskiwania." />
+                <input type="hidden" name="code" value="@twoFactorCode" />
+                <input type="hidden" name="rememberMe" value="@(RememberMe ? "true" : "false")" />
+                <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           Class="mt-4"
+                           ButtonType="ButtonType.Submit">
+                    Zweryfikuj
+                </MudButton>
+            </form>
+            <MudText Typo="Typo.body2" Class="mt-4" Align="Align.Center">
+                Zgubiony telefon i brak kodów odzyskiwania? Skontaktuj się z administratorem.
+            </MudText>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private string twoFactorCode = string.Empty;
+
+    private string? ErrorMessage { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery]
+    public bool RememberMe { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    [CascadingParameter]
+    private MainLayout MainLayout { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        MainLayout.SetPath("/login/2fa");
+
+        ErrorMessage = Error switch
+        {
+            "InvalidCode" => "Nieprawidłowy kod. Spróbuj ponownie.",
+            _ => null
+        };
+
+        if (AuthenticationState is not null)
+        {
+            var authState = await AuthenticationState;
+            if (authState.User.HasClaim(AuthPolicies.AuthenticationMethodClaim, AuthPolicies.MultiFactorAuthenticationMethod))
+            {
+                NavigationManager.NavigateTo("/dashboard");
+            }
+        }
+    }
+}

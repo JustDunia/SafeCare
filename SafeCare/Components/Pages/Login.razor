@@ -16,6 +16,10 @@
             {
                 <MudAlert Severity="Severity.Error" Class="mb-4">@ErrorMessage</MudAlert>
             }
+            @if (!string.IsNullOrEmpty(InfoMessage))
+            {
+                <MudAlert Severity="Severity.Success" Class="mb-4">@InfoMessage</MudAlert>
+            }
             <form method="post" action="/signin">
                 <AntiforgeryToken />
                 <MudTextField @bind-Value="userName"
@@ -67,11 +71,16 @@
 
     private string? ErrorMessage { get; set; }
 
+    private string? InfoMessage { get; set; }
+
     [SupplyParameterFromQuery]
     public string? ReturnUrl { get; set; }
 
     [SupplyParameterFromQuery(Name = "error")]
     public string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "info")]
+    public string? Info { get; set; }
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
@@ -88,6 +97,13 @@
         {
             "InvalidCredentials" => "Nieprawidłowa nazwa użytkownika lub hasło.",
             "LockedOut" => "Konto zostało zablokowane. Spróbuj ponownie później.",
+            "TwoFactorExpired" => "Czas na podanie kodu minął. Zaloguj się ponownie.",
+            _ => null
+        };
+
+        InfoMessage = Info switch
+        {
+            "TwoFactorEnabled" => "Weryfikacja dwuetapowa jest skonfigurowana. Zaloguj się ponownie — tym razem poprosimy też o kod z aplikacji.",
             _ => null
         };
 

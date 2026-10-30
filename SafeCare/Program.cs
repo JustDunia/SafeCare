@@ -53,6 +53,7 @@ try
     builder.Services.AddScoped<IDepartmentService, DepartmentService>();
     builder.Services.AddScoped<IIncidentReportService, IncidentReportService>();
     builder.Services.AddScoped<IUserManagementService, UserManagementService>();
+    builder.Services.AddScoped<ITwoFactorService, TwoFactorService>();
     builder.Services.AddEmailNotifications(builder.Configuration);
 
     var app = builder.Build();
@@ -97,6 +98,7 @@ try
         .AddInteractiveServerRenderMode();
 
     app.MapSignInEndpoint();
+    app.MapTwoFactorSignInEndpoint();
     app.MapSignOutEndpoint();
 
     app.Run();

@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using SafeCare.Data;
 using SafeCare.Data.Entities;
 using SafeCare.Dtos;
+using SafeCare.Email;
+using Serilog;
 
 namespace SafeCare.Services;
 
@@ -37,6 +39,16 @@ public interface IUserManagementService
     /// <param name="currentUserId">The signed-in administrator performing the deletion.</param>
     /// <returns>Success, or a Polish message explaining why the deletion was refused.</returns>
     Task<(bool Success, string? Error)> DeleteUserAsync(Guid userId, Guid currentUserId, CancellationToken token = default);
+
+    /// <summary>
+    /// Resets a user's two-factor authentication after they lose their phone: turns it off
+    /// and discards the authenticator key, so the next sign-in leads them through setup
+    /// again, and e-mails them that it happened. Refuses the caller's own account — an
+    /// administrator does that from their own account settings, with a recovery code.
+    /// </summary>
+    /// <param name="currentUserId">The signed-in administrator performing the reset.</param>
+    /// <returns>Success, or a Polish message explaining why the reset was refused.</returns>
+    Task<(bool Success, string? Error)> ResetTwoFactorAsync(Guid userId, Guid currentUserId, CancellationToken token = default);
 }
 
 /// <summary>
@@ -44,10 +56,14 @@ public interface IUserManagementService
 /// </summary>
 public class UserManagementService(
     UserManager<User> userManager,
-    IDbContextFactory<AppDbContext> dbContextFactory) : IUserManagementService
+    IDbContextFactory<AppDbContext> dbContextFactory,
+    IEmailQueue emailQueue,
+    ITwoFactorService twoFactorService) : IUserManagementService
 {
     private readonly UserManager<User> _userManager = userManager;
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory = dbContextFactory;
+    private readonly IEmailQueue _emailQueue = emailQueue;
+    private readonly ITwoFactorService _twoFactorService = twoFactorService;
 
     public async Task<IReadOnlyList<AdminUserDto>> GetUsersAsync(CancellationToken token = default)
     {
@@ -65,12 +81,13 @@ public class UserManagementService(
                                         u.FirstName,
                                         u.LastName,
                                         u.Email,
+                                        u.TwoFactorEnabled,
                                         Role = r != null ? r.Name : null
                                     })
             .ToListAsync(token);
 
         var result = usersWithRoles
-            .GroupBy(x => new { x.Id, x.UserName, x.FirstName, x.LastName, x.Email })
+            .GroupBy(x => new { x.Id, x.UserName, x.FirstName, x.LastName, x.Email, x.TwoFactorEnabled })
             .Select(group =>
             {
                 var role = group.Any(x => x.Role == AppRoles.Admin) ? AppRoles.Admin : AppRoles.User;
@@ -82,7 +99,8 @@ public class UserManagementService(
                     FirstName = group.Key.FirstName,
                     LastName = group.Key.LastName,
                     Email = group.Key.Email ?? string.Empty,
-                    Role = role
+                    Role = role,
+                    TwoFactorEnabled = group.Key.TwoFactorEnabled
                 };
             })
             .OrderBy(x => x.UserName)
@@ -225,6 +243,44 @@ public class UserManagementService(
         if (!deleteResult.Succeeded)
         {
             return (false, TranslateIdentityErrors(deleteResult.Errors));
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> ResetTwoFactorAsync(Guid userId, Guid currentUserId, CancellationToken token = default)
+    {
+        if (userId == currentUserId)
+        {
+            return (false, "Własną weryfikację dwuetapową zmienisz w ustawieniach konta.");
+        }
+
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user is null)
+        {
+            return (false, "Nie znaleziono użytkownika.");
+        }
+
+        // Through ITwoFactorService, which writes in a scope of its own. The user entity
+        // above stays tracked by this circuit's DbContext; written back from here, its
+        // concurrency stamp would be stale as soon as the user set up their app again, and a
+        // second reset in the same session would fail.
+        await _twoFactorService.RestartSetupAsync(userId);
+
+        Log.Information("Two-factor authentication reset for user {UserName} by administrator {AdminId}", user.UserName, currentUserId);
+
+        // As with report notifications, a broken mail server must not undo or fail the
+        // reset itself — the user still needs to get back in.
+        if (!string.IsNullOrWhiteSpace(user.Email))
+        {
+            try
+            {
+                _emailQueue.Enqueue(TwoFactorResetEmailTemplate.Build(user));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to enqueue two-factor reset notice for user {UserName}", user.UserName);
+            }
         }
 
         return (true, null);

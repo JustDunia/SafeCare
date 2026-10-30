@@ -44,7 +44,9 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     /// <summary>
     /// Empties the domain tables and every account except the seeded administrator, which
-    /// cannot be recreated without re-running the migration that carries it.
+    /// cannot be recreated without re-running the migration that carries it — so its
+    /// two-factor state (the flag, plus the authenticator key and recovery codes in
+    /// AspNetUserTokens) is reset in place instead.
     /// </summary>
     public async Task ResetAsync()
     {
@@ -54,6 +56,8 @@ public sealed class PostgresFixture : IAsyncLifetime
             TRUNCATE TABLE "IncidentDefinitions" RESTART IDENTITY CASCADE;
             DELETE FROM "AspNetUserRoles" WHERE "UserId" <> @adminId;
             DELETE FROM "AspNetUsers" WHERE "Id" <> @adminId;
+            DELETE FROM "AspNetUserTokens";
+            UPDATE "AspNetUsers" SET "TwoFactorEnabled" = false WHERE "Id" = @adminId;
             """;
 
         await using var connection = new NpgsqlConnection(ConnectionString);

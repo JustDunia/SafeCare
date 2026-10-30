@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using Microsoft.Playwright;
+using SafeCare.Tests;
 
 namespace SafeCare.E2ETests.Infrastructure;
 
@@ -112,7 +113,8 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
     }
 
     /// <summary>
-    /// Logs in as the seeded administrator.
+    /// Logs in as the seeded administrator: password, then a code from the authenticator key
+    /// the fixture set up.
     ///
     /// Login.razor's visible fields are MudBlazor text fields, not plain HTML inputs with a
     /// `name` attribute — Playwright has to target them by their `autocomplete` attribute
@@ -126,6 +128,8 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
     {
         await page.GotoAsync("/login");
         await SubmitLoginFormAsync(page, "admin", "Admin123!");
+        await page.WaitForURLAsync(url => url.Contains("/login/2fa"));
+        await SubmitTwoFactorCodeAsync(page, AdminCode());
         await page.WaitForURLAsync(url => !url.Contains("/login"));
 
         // The URL changes as soon as the redirect is followed. A caller that navigates again
@@ -177,6 +181,41 @@ public abstract class E2ETestBase(AppFixture fixture) : IAsyncLifetime
                         && document.querySelector('input[name="password"]')?.value === pass
                     """,
                     new[] { userName, password },
+                    new PageWaitForFunctionOptions { Timeout = 2_000 });
+                break;
+            }
+            catch (TimeoutException) when (DateTime.UtcNow < deadline)
+            {
+                // circuit not connected yet - type again
+            }
+        }
+
+        await page.ClickAsync("form button[type='submit']");
+    }
+
+    /// <summary>
+    /// The code the seeded administrator's authenticator app would show right now.
+    /// </summary>
+    protected string AdminCode() => Totp.Compute(Fixture.AdminAuthenticatorKey);
+
+    /// <summary>
+    /// Fills the two-factor code form that is already open and submits it, without waiting
+    /// for the outcome. The page posts from a hidden input exactly as the login form does, so
+    /// it is filled the same way — retried until the circuit has picked the value up.
+    /// </summary>
+    protected static async Task SubmitTwoFactorCodeAsync(IPage page, string code)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+
+        while (true)
+        {
+            await page.FillAsync("input[autocomplete='one-time-code']", code);
+
+            try
+            {
+                await page.WaitForFunctionAsync(
+                    "code => document.querySelector('input[name=\"code\"]')?.value === code",
+                    code,
                     new PageWaitForFunctionOptions { Timeout = 2_000 });
                 break;
             }

@@ -1,7 +1,9 @@
 ﻿using System.Text.RegularExpressions;
 using System.Web;
 using Microsoft.Playwright;
+using SafeCare.Data.Entities;
 using SafeCare.E2ETests.Infrastructure;
+using SafeCare.Tests;
 using static Microsoft.Playwright.Assertions;
 
 namespace SafeCare.E2ETests;
@@ -10,6 +12,8 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
 {
     // The seeded administrator's display name - see the HasData seed in User.cs.
     private const string AdminDisplayName = "System Administrator";
+
+    private const string NewUserPassword = "Haslo123!";
 
     [Fact]
     public async Task SignsInWithValidCredentialsAndLandsOnTheDashboard()
@@ -51,6 +55,8 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
         Assert.Equal(path, query["returnUrl"]);
 
         await SubmitLoginFormAsync(page, "admin", "Admin123!");
+        await page.WaitForURLAsync(url => url.Contains("/login/2fa"));
+        await SubmitTwoFactorCodeAsync(page, AdminCode());
 
         await Expect(page).ToHaveURLAsync(new Regex(Regex.Escape(path) + "$"));
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = heading })).ToBeVisibleAsync();
@@ -65,9 +71,117 @@ public class AuthenticationTests(AppFixture fixture) : E2ETestBase(fixture)
         await page.GotoAsync("/login?returnUrl=" + Uri.EscapeDataString("https://evil.example/phish"));
 
         await SubmitLoginFormAsync(page, "admin", "Admin123!");
+        await page.WaitForURLAsync(url => url.Contains("/login/2fa"));
+        await SubmitTwoFactorCodeAsync(page, AdminCode());
 
         await Expect(page).ToHaveURLAsync(new Regex("/dashboard$"));
         Assert.StartsWith(Fixture.BaseUrl, page.Url);
+    }
+
+    [Fact]
+    public async Task OpensNothingUntilTheCodeFromTheAppIsGiven()
+    {
+        // The right password alone must not be a session: it only earns the code step.
+        var page = await NewPageAsync();
+        await page.GotoAsync("/login");
+        await SubmitLoginFormAsync(page, "admin", "Admin123!");
+        await Expect(page).ToHaveURLAsync(new Regex(@"/login/2fa\?"));
+
+        await page.GotoAsync("/dashboard");
+
+        // The server's own challenge spells it "ReturnUrl"; the login page reads either.
+        await Expect(page).ToHaveURLAsync(new Regex(@"/login\?returnUrl=", RegexOptions.IgnoreCase));
+    }
+
+    [Fact]
+    public async Task RejectsAWrongCodeAndStaysOnTheCodeStep()
+    {
+        var page = await NewPageAsync();
+        await page.GotoAsync("/login");
+        await SubmitLoginFormAsync(page, "admin", "Admin123!");
+        await page.WaitForURLAsync(url => url.Contains("/login/2fa"));
+
+        // Identity accepts codes from neighbouring time steps too; one from a day ago is
+        // wrong for certain.
+        var wrongCode = Totp.Compute(Fixture.AdminAuthenticatorKey, DateTimeOffset.UtcNow.AddDays(-1));
+        await SubmitTwoFactorCodeAsync(page, wrongCode);
+
+        await Expect(page).ToHaveURLAsync(new Regex(@"/login/2fa\?.*error=InvalidCode"));
+        await Expect(page.GetByText("Nieprawidłowy kod. Spróbuj ponownie.")).ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task SignsInWithARecoveryCodeInsteadOfTheApp()
+    {
+        // The way back in for an administrator whose phone is gone — nobody else can reset
+        // their two-factor authentication for them.
+        var page = await NewPageAsync();
+        await page.GotoAsync("/login");
+        await SubmitLoginFormAsync(page, "admin", "Admin123!");
+        await page.WaitForURLAsync(url => url.Contains("/login/2fa"));
+
+        await SubmitTwoFactorCodeAsync(page, Fixture.TakeAdminRecoveryCode());
+
+        await Expect(page).ToHaveURLAsync(new Regex("/dashboard$"));
+    }
+
+    [Fact]
+    public async Task MakesANewUserSetUpTheAuthenticatorAppBeforeAnythingElse()
+    {
+        await Fixture.CreateUserAsync("nowy2fa", NewUserPassword, AppRoles.User);
+        var page = await NewPageAsync();
+        await page.GotoAsync("/login");
+
+        await SubmitLoginFormAsync(page, "nowy2fa", NewUserPassword);
+
+        await Expect(page).ToHaveURLAsync(new Regex("/account/2fa-setup$"));
+
+        // Until it is set up, every other page leads back here.
+        await page.GotoAsync("/dashboard");
+        await Expect(page).ToHaveURLAsync(new Regex("/account/2fa-setup$"));
+
+        // The key shown for typing in by hand — the same secret the QR code carries.
+        var key = await page.GetByTestId("authenticator-key").InnerTextAsync();
+        await ConfirmAuthenticatorSetupAsync(page, key);
+
+        await Expect(page.GetByTestId("recovery-codes").Locator("code")).ToHaveCountAsync(10);
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Kody zapisane — zaloguj ponownie" }).ClickAsync();
+
+        await Expect(page).ToHaveURLAsync(new Regex(@"/login\?info=TwoFactorEnabled$"));
+        await Expect(page.GetByText("Weryfikacja dwuetapowa jest skonfigurowana.", new() { Exact = false })).ToBeVisibleAsync();
+
+        await SubmitLoginFormAsync(page, "nowy2fa", NewUserPassword);
+        await page.WaitForURLAsync(url => url.Contains("/login/2fa"));
+        await SubmitTwoFactorCodeAsync(page, Totp.Compute(key));
+
+        await Expect(page).ToHaveURLAsync(new Regex("/dashboard$"));
+    }
+
+    /// <summary>
+    /// Enters a code on the setup page and confirms it. That form is handled by the circuit,
+    /// so a click before the circuit attaches does nothing useful; it is retried, with a
+    /// fresh code each time, until the recovery codes appear.
+    /// </summary>
+    private static async Task ConfirmAuthenticatorSetupAsync(IPage page, string key)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+
+        while (true)
+        {
+            await page.GetByLabel("Kod z aplikacji").FillAsync(Totp.Compute(key));
+            await page.GetByRole(AriaRole.Button, new() { Name = "Potwierdź" }).ClickAsync();
+
+            try
+            {
+                await page.GetByTestId("recovery-codes").WaitForAsync(new() { Timeout = 3_000 });
+                return;
+            }
+            catch (TimeoutException) when (DateTime.UtcNow < deadline)
+            {
+                // circuit not connected yet - try again
+            }
+        }
     }
 
     [Fact]

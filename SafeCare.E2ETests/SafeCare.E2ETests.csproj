@@ -20,6 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Authenticator codes for signing in; one implementation, shared with the unit tests. -->
+    <Compile Include="..\SafeCare.Tests\Totp.cs" Link="Infrastructure\Totp.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

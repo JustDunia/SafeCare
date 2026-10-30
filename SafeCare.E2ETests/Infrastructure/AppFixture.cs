@@ -1,11 +1,15 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using SafeCare.Data;
+using SafeCare.Data.Entities;
 using Testcontainers.PostgreSql;
 
 namespace SafeCare.E2ETests.Infrastructure;
@@ -47,6 +51,16 @@ public sealed class AppFixture : IAsyncLifetime
 
     public DbContextOptions<AppDbContext> DbOptions { get; private set; } = null!;
 
+    /// <summary>
+    /// The seeded administrator's authenticator key. Two-factor authentication is mandatory,
+    /// so the fixture sets it up for the administrator before any test runs; tests compute
+    /// codes from this key with <see cref="SafeCare.Tests.Totp"/>.
+    /// </summary>
+    public string AdminAuthenticatorKey { get; private set; } = "";
+
+    // Recovery codes work once each, so every test that uses one takes its own.
+    private readonly ConcurrentQueue<string> _adminRecoveryCodes = new();
+
     public async ValueTask InitializeAsync()
     {
         try
@@ -64,6 +78,10 @@ public sealed class AppFixture : IAsyncLifetime
 
             StartApplication(port);
             await WaitUntilReadyAsync();
+
+            // After startup, so that the application's own seeding has finished with the
+            // administrator account.
+            await SetUpAdminTwoFactorAsync();
 
             _playwright = await Playwright.CreateAsync();
             Browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
@@ -111,6 +129,86 @@ public sealed class AppFixture : IAsyncLifetime
 
         await _mailpit.DisposeAsync();
         await _database.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Takes one of the seeded administrator's unused recovery codes.
+    /// </summary>
+    public string TakeAdminRecoveryCode() =>
+        _adminRecoveryCodes.TryDequeue(out var code)
+            ? code
+            : throw new InvalidOperationException("The administrator's recovery codes have run out.");
+
+    /// <summary>
+    /// Creates an account. Without <paramref name="twoFactor"/> it is what a user looks like
+    /// before their first sign-in; with it, the account has an authenticator app set up, and
+    /// its key is returned.
+    /// </summary>
+    public async Task<string?> CreateUserAsync(string userName, string password, string role, bool twoFactor = false)
+    {
+        await using var provider = BuildIdentityServices();
+        var userManager = provider.GetRequiredService<UserManager<User>>();
+
+        var user = new User
+        {
+            UserName = userName,
+            Email = $"{userName}@szpital.example",
+            FirstName = "Test",
+            LastName = userName
+        };
+
+        var created = await userManager.CreateAsync(user, password);
+        if (!created.Succeeded)
+        {
+            throw new InvalidOperationException($"Could not create {userName}: {string.Join(", ", created.Errors.Select(e => e.Description))}");
+        }
+
+        await userManager.AddToRoleAsync(user, role);
+
+        if (!twoFactor)
+        {
+            return null;
+        }
+
+        await userManager.ResetAuthenticatorKeyAsync(user);
+        await userManager.SetTwoFactorEnabledAsync(user, true);
+        return await userManager.GetAuthenticatorKeyAsync(user);
+    }
+
+    private async Task SetUpAdminTwoFactorAsync()
+    {
+        await using var provider = BuildIdentityServices();
+        var userManager = provider.GetRequiredService<UserManager<User>>();
+
+        var admin = await userManager.FindByNameAsync("admin")
+            ?? throw new InvalidOperationException("Seeded admin account not found.");
+
+        await userManager.ResetAuthenticatorKeyAsync(admin);
+        AdminAuthenticatorKey = await userManager.GetAuthenticatorKeyAsync(admin)
+            ?? throw new InvalidOperationException("No authenticator key was stored for the admin.");
+        await userManager.SetTwoFactorEnabledAsync(admin, true);
+
+        foreach (var code in await userManager.GenerateNewTwoFactorRecoveryCodesAsync(admin, 10) ?? [])
+        {
+            _adminRecoveryCodes.Enqueue(code);
+        }
+    }
+
+    /// <summary>
+    /// A real <see cref="UserManager{TUser}"/> against the application's database, for
+    /// arranging accounts the way the application itself would store them.
+    /// </summary>
+    private ServiceProvider BuildIdentityServices()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped(_ => new AppDbContext(DbOptions));
+        services.AddIdentityCore<User>()
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<AppDbContext>()
+            .AddTokenProvider<AuthenticatorTokenProvider<User>>(TokenOptions.DefaultAuthenticatorProvider);
+
+        return services.BuildServiceProvider();
     }
 
     private static int FreeTcpPort()

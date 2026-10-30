@@ -1,4 +1,6 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
+using SafeCare.Data.Entities;
 using SafeCare.E2ETests.Infrastructure;
 using static Microsoft.Playwright.Assertions;
 
@@ -30,5 +32,39 @@ public class UserManagementTests(AppFixture fixture) : E2ETestBase(fixture)
             .ToHaveAttributeAsync("autocomplete", "new-password");
         await Expect(page.GetByLabel("Nazwa użytkownika"))
             .ToHaveAttributeAsync("autocomplete", "off");
+    }
+
+    [Fact]
+    public async Task ResetsAUsersTwoFactorAuthenticationAndEmailsThem()
+    {
+        // The user has lost their phone: after the reset they sign in with their password
+        // alone and are led straight back through setup.
+        await Fixture.CreateUserAsync("zgubiony", "Haslo123!", AppRoles.User, twoFactor: true);
+        using var mail = new MailPitClient(Fixture.MailPitApiUrl);
+
+        var page = await NewPageAsync();
+        await LoginAsAdminAsync(page);
+
+        // Reach the page through the menu rather than a fresh load, so the circuit that
+        // LoginAsAdminAsync waited for is the one handling the clicks below.
+        await page.GetByRole(AriaRole.Button, new() { Name = "System Administrator" }).First.ClickAsync();
+        await page.GetByText("Zarządzanie użytkownikami").ClickAsync();
+
+        var row = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "zgubiony" });
+        await Expect(row.GetByText("Włączona")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        await row.GetByRole(AriaRole.Button, new() { Name = "Resetuj 2FA" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Tak, resetuj" }).ClickAsync();
+
+        await Expect(page.GetByText("Weryfikacja dwuetapowa została zresetowana.")).ToBeVisibleAsync();
+        await Expect(row.GetByText("Nieskonfigurowana")).ToBeVisibleAsync();
+
+        var message = await mail.WaitForMessageAsync("Zresetowano weryfikację dwuetapową", TimeSpan.FromSeconds(60));
+        Assert.Contains(message.Bcc ?? [], a => a.Address == "zgubiony@szpital.example");
+
+        var user = await NewPageAsync();
+        await user.GotoAsync("/login");
+        await SubmitLoginFormAsync(user, "zgubiony", "Haslo123!");
+        await Expect(user).ToHaveURLAsync(new Regex("/account/2fa-setup$"));
     }
 }

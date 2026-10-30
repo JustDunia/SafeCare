@@ -1,0 +1,214 @@
+﻿@page "/account/2fa-setup"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
+@using SafeCare.Components.Layout
+@using SafeCare.Data.Entities
+@using SafeCare.Dtos
+@using SafeCare.Services
+@using SafeCare.Utils
+@using Serilog
+@* The one page a password-only session can open: two-factor authentication is mandatory,
+   and this is where it is set up. *@
+@attribute [Authorize(Policy = AuthPolicies.TwoFactorEnrollment)]
+@inject UserManager<User> UserManager
+@inject ITwoFactorService TwoFactorService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Konfiguracja weryfikacji dwuetapowej</PageTitle>
+
+<MudStack Class="mt-4" Spacing="4" Style="max-width:640px">
+    <MudText Typo="Typo.h5">Konfiguracja weryfikacji dwuetapowej</MudText>
+
+    @if (isLoading)
+    {
+        <MudProgressLinear Indeterminate Color="Color.Primary" />
+    }
+    else if (recoveryCodes is not null)
+    {
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Class="me-2" />
+                <MudText>Weryfikacja dwuetapowa jest włączona</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <RecoveryCodesList Codes="recoveryCodes" />
+            </MudCardContent>
+            <MudCardActions>
+                @* Signing in again replaces this password-only session with one that has
+                   passed the second factor — and proves the app works before the user leaves. *@
+                <form method="post" action="/signout?relogin=true">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" ButtonType="ButtonType.Submit">
+                        Kody zapisane — zaloguj ponownie
+                    </MudButton>
+                </form>
+            </MudCardActions>
+        </MudCard>
+    }
+    else if (alreadyEnabled)
+    {
+        <MudAlert Severity="Severity.Info">
+            Weryfikacja dwuetapowa jest już włączona na tym koncie. Zaloguj się ponownie, podając kod z aplikacji.
+        </MudAlert>
+        <form method="post" action="/signout?relogin=true">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" ButtonType="ButtonType.Submit">
+                Zaloguj ponownie
+            </MudButton>
+        </form>
+    }
+    else if (setup is not null)
+    {
+        <MudText Typo="Typo.body1">
+            Logowanie do SafeCare wymaga kodu z aplikacji uwierzytelniającej. Skonfiguruj ją teraz — zajmie to minutę.
+        </MudText>
+
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.subtitle1" Class="mb-2"><strong>1.</strong> Otwórz Microsoft Authenticator i dodaj konto: <strong>+</strong> → <strong>Inne konto</strong>.</MudText>
+
+                <MudText Typo="Typo.subtitle1" Class="mb-2"><strong>2.</strong> Zeskanuj ten kod QR:</MudText>
+                <div class="d-flex justify-center mb-2">
+                    <img src="@setup.QrCodeDataUri" alt="Kod QR do aplikacji uwierzytelniającej" width="220" height="220" />
+                </div>
+                <MudText Typo="Typo.body2" Class="mb-4">
+                    Nie możesz zeskanować? Wpisz w aplikacji ręcznie ten klucz:
+                    <br /><code data-testid="authenticator-key">@setup.SharedKey</code>
+                </MudText>
+
+                <MudText Typo="Typo.subtitle1" Class="mb-2"><strong>3.</strong> Wpisz 6-cyfrowy kod, który pokazuje aplikacja:</MudText>
+                <form @onsubmit="EnableAsync">
+                    <MudTextField @bind-Value="verificationCode"
+                                  Label="Kod z aplikacji"
+                                  Variant="Variant.Outlined"
+                                  ShrinkLabel
+                                  MaxLength="7"
+                                  Immediate="true"
+                                  autocomplete="one-time-code"
+                                  Error="@(verificationError is not null)"
+                                  ErrorText="@verificationError" />
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Class="mt-4"
+                               ButtonType="ButtonType.Submit"
+                               Disabled="isSaving">
+                        Potwierdź
+                    </MudButton>
+                </form>
+            </MudCardContent>
+        </MudCard>
+
+        @* The layout's user menu is not shown to a session without a second factor, so this is
+           the way out for someone who would rather do this later. *@
+        <form method="post" action="/signout">
+            <MudButton Variant="Variant.Text" ButtonType="ButtonType.Submit">Wyloguj</MudButton>
+        </form>
+    }
+</MudStack>
+
+@code {
+    [CascadingParameter]
+    private MainLayout MainLayout { get; set; } = default!;
+
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool alreadyEnabled;
+    private string verificationCode = string.Empty;
+    private string? verificationError;
+    private AuthenticatorSetupDto? setup;
+    private IReadOnlyList<string>? recoveryCodes;
+    private Guid? userId;
+    private string? userName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        MainLayout.SetPath("/account/2fa-setup");
+
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            userName = authState.User.Identity?.Name;
+
+            // The id comes from the cookie's claims; everything else is read by
+            // TwoFactorService in a scope of its own.
+            userId = Guid.TryParse(UserManager.GetUserId(authState.User), out var id) ? id : null;
+            var isEnabled = userId is null ? null : await TwoFactorService.IsEnabledAsync(userId.Value);
+
+            if (isEnabled is null)
+            {
+                userId = null;
+                // Account deleted while this session was open; security stamp validation
+                // signs the cookie out shortly.
+                Log.Warning("Authenticated principal {UserName} has no matching user record on the two-factor setup page.", userName);
+                Snackbar.Add("Nie znaleziono konta. Zaloguj się ponownie.", Severity.Warning);
+                return;
+            }
+
+            if (isEnabled == true)
+            {
+                var hasSecondFactor = authState.User.HasClaim(
+                    AuthPolicies.AuthenticationMethodClaim, AuthPolicies.MultiFactorAuthenticationMethod);
+
+                if (hasSecondFactor)
+                {
+                    NavigationManager.NavigateTo("/account");
+                    return;
+                }
+
+                alreadyEnabled = true;
+                return;
+            }
+
+            setup = await TwoFactorService.GetAuthenticatorSetupAsync(userId!.Value);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to prepare two-factor setup.");
+            Snackbar.Add("Nie udało się przygotować konfiguracji weryfikacji dwuetapowej.", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task EnableAsync()
+    {
+        if (userId is null || isSaving)
+        {
+            return;
+        }
+
+        verificationError = null;
+        if (string.IsNullOrWhiteSpace(verificationCode))
+        {
+            verificationError = "Wpisz kod z aplikacji.";
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            recoveryCodes = await TwoFactorService.EnableAsync(userId.Value, verificationCode.Trim());
+
+            if (recoveryCodes is null)
+            {
+                verificationError = "Nieprawidłowy kod. Sprawdź, czy w aplikacji wybrane jest konto SafeCare, i wpisz aktualny kod.";
+                return;
+            }
+
+            Log.Information("User {UserName} enabled two-factor authentication", userName);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to enable two-factor authentication for {UserName}", userName);
+            Snackbar.Add("Nie udało się włączyć weryfikacji dwuetapowej.", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

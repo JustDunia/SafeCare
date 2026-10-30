@@ -15,7 +15,8 @@ public class UserManagementServiceTests(PostgresFixture fixture) : IntegrationTe
     {
         _provider = IdentityServiceProvider.Build(Fixture.Options);
         var userManager = _provider.GetRequiredService<UserManager<User>>();
-        return new UserManagementService(userManager, DbFactory);
+        var twoFactor = new TwoFactorService(_provider.GetRequiredService<IServiceScopeFactory>());
+        return new UserManagementService(userManager, DbFactory, EmailQueue, twoFactor);
     }
 
     private static CreateUserDto ValidUser(string userName = "nowak") => new()
@@ -187,5 +188,130 @@ public class UserManagementServiceTests(PostgresFixture fixture) : IntegrationTe
         var users = await sut.GetUsersAsync();
 
         Assert.Equal(users.Select(u => u.UserName).OrderBy(n => n), users.Select(u => u.UserName));
+    }
+
+    [Fact]
+    public async Task ReportsWhetherEachAccountHasTwoFactorAuthentication()
+    {
+        var sut = CreateSut();
+        await sut.CreateUserAsync(ValidUser());
+        var nowak = await EnableTwoFactorAsync("nowak");
+
+        var users = await sut.GetUsersAsync();
+
+        Assert.True(users.Single(u => u.Id == nowak.Id).TwoFactorEnabled);
+        Assert.False(users.Single(u => u.Id == PostgresFixture.SeededAdminId).TwoFactorEnabled);
+    }
+
+    [Fact]
+    public async Task ResetsAnotherUsersTwoFactorAuthenticationAndTellsThem()
+    {
+        var sut = CreateSut();
+        await sut.CreateUserAsync(ValidUser());
+        var nowak = await EnableTwoFactorAsync("nowak");
+        var oldKey = await AuthenticatorKeyAsync(nowak.Id);
+        var oldStamp = nowak.SecurityStamp;
+
+        var (success, error) = await sut.ResetTwoFactorAsync(nowak.Id, PostgresFixture.SeededAdminId);
+
+        Assert.True(success, error);
+
+        using var scope = _provider.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var reloaded = await userManager.FindByIdAsync(nowak.Id.ToString());
+        Assert.NotNull(reloaded);
+        Assert.False(reloaded.TwoFactorEnabled);
+        // The lost phone's codes must stop working, and its open sessions must end.
+        Assert.NotEqual(oldKey, await userManager.GetAuthenticatorKeyAsync(reloaded));
+        Assert.NotEqual(oldStamp, reloaded.SecurityStamp);
+
+        var notice = Assert.Single(EmailQueue.Sent);
+        Assert.Equal(["nowak@szpital.pl"], notice.BccRecipients);
+        Assert.Contains("nowak", notice.HtmlBody);
+    }
+
+    [Fact]
+    public async Task RefusesToResetTheCallersOwnTwoFactorAuthentication()
+    {
+        var sut = CreateSut();
+
+        var (success, error) = await sut.ResetTwoFactorAsync(PostgresFixture.SeededAdminId, PostgresFixture.SeededAdminId);
+
+        Assert.False(success);
+        Assert.Equal("Własną weryfikację dwuetapową zmienisz w ustawieniach konta.", error);
+        Assert.Empty(EmailQueue.Sent);
+    }
+
+    [Fact]
+    public async Task ResetsTwoFactorAuthenticationEvenWhenTheMailQueueFails()
+    {
+        // The user has lost their phone and needs to get back in; a broken mail server must
+        // not stand in the way.
+        var sut = CreateSut();
+        await sut.CreateUserAsync(ValidUser());
+        var nowak = await EnableTwoFactorAsync("nowak");
+        EmailQueue.ThrowOnEnqueue = true;
+
+        var (success, error) = await sut.ResetTwoFactorAsync(nowak.Id, PostgresFixture.SeededAdminId);
+
+        Assert.True(success, error);
+    }
+
+    [Fact]
+    public async Task ReportsAMissingAccountOnTwoFactorReset()
+    {
+        var sut = CreateSut();
+
+        var (success, error) = await sut.ResetTwoFactorAsync(Guid.NewGuid(), PostgresFixture.SeededAdminId);
+
+        Assert.False(success);
+        Assert.Equal("Nie znaleziono użytkownika.", error);
+    }
+
+    [Fact]
+    public async Task ResetsTwoFactorAuthenticationAgainAfterTheUserSetItUpAgain()
+    {
+        // One admin session, two resets, with the user setting the app up again in between -
+        // the second reset must not trip over what the first one left behind.
+        var sut = CreateSut();
+        await sut.CreateUserAsync(ValidUser());
+        var nowak = await EnableTwoFactorAsync("nowak");
+        await sut.ResetTwoFactorAsync(nowak.Id, PostgresFixture.SeededAdminId);
+        await EnableTwoFactorAsync("nowak");
+
+        var (success, error) = await sut.ResetTwoFactorAsync(nowak.Id, PostgresFixture.SeededAdminId);
+
+        Assert.True(success, error);
+    }
+
+    /// <summary>
+    /// Sets the authenticator app up the way the setup page does, through scopes of its own.
+    /// </summary>
+    private async Task<User> EnableTwoFactorAsync(string userName)
+    {
+        var userId = await UserIdAsync(userName);
+
+        var twoFactor = new TwoFactorService(_provider.GetRequiredService<IServiceScopeFactory>());
+        var setup = await twoFactor.GetAuthenticatorSetupAsync(userId);
+        Assert.NotNull(await twoFactor.EnableAsync(userId, Totp.Compute(setup.SharedKey)));
+
+        using var scope = _provider.CreateScope();
+        return (await scope.ServiceProvider.GetRequiredService<UserManager<User>>().FindByIdAsync(userId.ToString()))!;
+    }
+
+    private async Task<Guid> UserIdAsync(string userName)
+    {
+        using var scope = _provider.CreateScope();
+        var user = await scope.ServiceProvider.GetRequiredService<UserManager<User>>().FindByNameAsync(userName);
+        Assert.NotNull(user);
+        return user.Id;
+    }
+
+    private async Task<string?> AuthenticatorKeyAsync(Guid userId)
+    {
+        using var scope = _provider.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        return await userManager.GetAuthenticatorKeyAsync(user!);
     }
 }

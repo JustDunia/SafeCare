@@ -4,10 +4,15 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using SafeCare.Components.Layout
 @using SafeCare.Data.Entities
+@using SafeCare.Services
 @using Serilog
 @attribute [Authorize]
 @inject UserManager<User> UserManager
+@inject ITwoFactorService TwoFactorService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject IServiceScopeFactory ScopeFactory
 @inject ISnackbar Snackbar
 
 <PageTitle>Ustawienia konta</PageTitle>
@@ -44,6 +49,40 @@
                 </MudButton>
             </MudCardActions>
         </MudCard>
+
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Primary" Class="me-2" />
+                <MudText>Weryfikacja dwuetapowa</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body2" Class="mb-3">
+                    Logowanie wymaga kodu z aplikacji uwierzytelniającej.
+                    Pozostałe kody odzyskiwania: <strong data-testid="recovery-code-count">@recoveryCodeCount</strong>
+                </MudText>
+                @if (newRecoveryCodes is not null)
+                {
+                    <RecoveryCodesList Codes="newRecoveryCodes" />
+                }
+                <MudText Typo="Typo.body2" Class="mt-3">
+                    Zgubiony telefon? Zaloguj się kodem odzyskiwania albo poproś administratora o reset.
+                </MudText>
+            </MudCardContent>
+            <MudCardActions Class="d-flex flex-wrap gap-2">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           OnClick="RegenerateRecoveryCodesAsync"
+                           Disabled="isSaving">
+                    Wygeneruj nowe kody odzyskiwania
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Warning"
+                           OnClick="RestartTwoFactorSetupAsync"
+                           Disabled="isSaving">
+                    Przenieś na nowy telefon
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
     }
 </MudStack>
 
@@ -55,6 +94,8 @@
     private bool isSaving;
     private bool receiveEmailNotifications;
     private string email = string.Empty;
+    private int recoveryCodeCount;
+    private IReadOnlyList<string>? newRecoveryCodes;
     private User? user;
 
     protected override async Task OnInitializedAsync()
@@ -76,6 +117,7 @@
             {
                 email = user.Email ?? string.Empty;
                 receiveEmailNotifications = user.ReceiveEmailNotifications;
+                recoveryCodeCount = await TwoFactorService.CountRecoveryCodesAsync(user.Id);
             }
         }
         catch (Exception ex)
@@ -100,8 +142,20 @@
 
         try
         {
-            user.ReceiveEmailNotifications = receiveEmailNotifications;
-            var result = await UserManager.UpdateAsync(user);
+            // Saved through a fresh scope and a freshly read user. The two-factor buttons on
+            // this page change the account through TwoFactorService's own scopes, which leaves
+            // the user loaded above with a stale concurrency stamp — updating it would fail.
+            using var scope = ScopeFactory.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            var current = await userManager.FindByIdAsync(user.Id.ToString());
+            if (current is null)
+            {
+                Snackbar.Add("Nie udało się zapisać ustawień.", Severity.Error);
+                return;
+            }
+
+            current.ReceiveEmailNotifications = receiveEmailNotifications;
+            var result = await userManager.UpdateAsync(current);
 
             if (result.Succeeded)
             {
@@ -123,5 +177,81 @@
         {
             isSaving = false;
         }
+    }
+
+    private async Task RegenerateRecoveryCodesAsync()
+    {
+        if (user is null)
+        {
+            return;
+        }
+
+        if (!await ConfirmAsync("Nowe kody odzyskiwania", "Dotychczasowe kody odzyskiwania przestaną działać. Kontynuować?", "Wygeneruj"))
+        {
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            newRecoveryCodes = await TwoFactorService.RegenerateRecoveryCodesAsync(user.Id);
+            recoveryCodeCount = newRecoveryCodes.Count;
+            Log.Information("User {UserName} regenerated recovery codes", user.UserName);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to regenerate recovery codes.");
+            Snackbar.Add("Nie udało się wygenerować nowych kodów.", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task RestartTwoFactorSetupAsync()
+    {
+        if (user is null)
+        {
+            return;
+        }
+
+        if (!await ConfirmAsync(
+                "Przeniesienie na nowy telefon",
+                "Kody z obecnej aplikacji przestaną działać od razu, a Ty przejdziesz do konfiguracji aplikacji na nowym telefonie. Kontynuować?",
+                "Przejdź do konfiguracji"))
+        {
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            await TwoFactorService.RestartSetupAsync(user.Id);
+            Log.Information("User {UserName} restarted two-factor setup", user.UserName);
+
+            // A full load, so the setup page is authorized against a fresh request.
+            NavigationManager.NavigateTo("/account/2fa-setup", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to restart two-factor setup.");
+            Snackbar.Add("Nie udało się rozpocząć ponownej konfiguracji.", Severity.Error);
+            isSaving = false;
+        }
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText)
+    {
+        var parameters = new DialogParameters
+        {
+            [nameof(ConfirmActionDialog.Message)] = message,
+            [nameof(ConfirmActionDialog.ConfirmText)] = confirmText
+        };
+
+        var dialogRef = await DialogService.ShowAsync<ConfirmActionDialog>(title, parameters, new DialogOptions { CloseOnEscapeKey = true });
+        var result = await dialogRef.Result;
+
+        return result is { Canceled: false };
     }
 }

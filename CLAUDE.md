@@ -65,7 +65,7 @@ E2E in another, plus vulnerable-package scanning, EF migration drift detection a
 
 Two modules share one Blazor app:
 - **Public** — `/` is an anonymous multi-section incident form ([Home.razor](SafeCare/Components/Pages/Home.razor)).
-- **Admin** — `/dashboard`, `/details/{Id}`, `/account` require auth; `/admin/users` requires the `Admin` role.
+- **Admin** — `/dashboard`, `/details/{Id}`, `/account` require a sign-in with two-factor authentication; `/admin/users` additionally requires the `Admin` role.
 
 Request/data flow: `.razor` page → `ViewModels` (`*Vm`) → `Mappings` extension → `Dtos` → `Services` → `IDbContextFactory<AppDbContext>` → EF Core. Validation is FluentValidation classes in `Validators/`, wired to MudBlazor via a `ValidateValue` func exposed on each validator.
 
@@ -75,13 +75,23 @@ Serilog is configured *before* the host is built and the whole app body sits in 
 
 ### Auth
 
-Cookie-based ASP.NET Core Identity with `IdentityRole<Guid>` and `Guid` keys. Because Blazor Server can't set cookies from a circuit, login/logout are **Minimal API form posts** to `/signin` and `/signout` ([SigninEndpoints.cs](SafeCare/Endpoints/SigninEndpoints.cs)); [Login.razor](SafeCare/Components/Pages/Login.razor) is a plain `<form method="post" action="/signin">` with `<AntiforgeryToken />`, and errors come back as `?error=` query params. `returnUrl` is validated to relative paths only. Configuration lives in [IdentityConfig.cs](SafeCare/Utils/IdentityConfig.cs).
+Cookie-based ASP.NET Core Identity with `IdentityRole<Guid>` and `Guid` keys. Because Blazor Server can't set cookies from a circuit, login/logout are **Minimal API form posts** to `/signin` and `/signout` ([SigninEndpoints.cs](SafeCare/Endpoints/SigninEndpoints.cs)); [Login.razor](SafeCare/Components/Pages/Login.razor) is a plain `<form method="post" action="/signin">` with `<AntiforgeryToken />`, and errors come back as `?error=` query params. `returnUrl` is validated to local paths only (`//host` and `/\host` are refused too). Configuration lives in [IdentityConfig.cs](SafeCare/Utils/IdentityConfig.cs).
 
-Roles are the constants in [AppRoles.cs](SafeCare/Data/Entities/AppRoles.cs) (`Admin`, `User`) — always use them, never string literals. Pages guard with `@attribute [Authorize]` or `[Authorize(Roles = AppRoles.Admin)]`; `<NotAuthorized>` in [Routes.razor](SafeCare/Components/Routes.razor) renders `RedirectUnauthorized`, which sends authenticated-but-forbidden users to `/dashboard` and anonymous users to `/login?returnUrl=…`.
+Roles are the constants in [AppRoles.cs](SafeCare/Data/Entities/AppRoles.cs) (`Admin`, `User`) — always use them, never string literals. Pages guard with `@attribute [Authorize]` or `[Authorize(Policy = AuthPolicies.Admin)]` — never `Roles =`, see below; `<NotAuthorized>` in [Routes.razor](SafeCare/Components/Routes.razor) renders `RedirectUnauthorized`, which sends authenticated-but-forbidden users to `/dashboard` (or to 2FA setup, if they have not passed a second factor) and anonymous users to `/login?returnUrl=…`.
 
 `returnUrl` has a sharp edge: `/signin` only accepts paths starting with `/` (that's the open-redirect guard), but `ToBaseRelativePath` returns no leading slash — `RedirectUnauthorized` must prepend one and escape the result, or every returnUrl is silently dropped. Security stamp validation runs every 5 minutes so deleted accounts are signed out promptly; components must still tolerate an authenticated principal with no user row (`MainLayout` degrades instead of throwing, since throwing there kills every page).
 
 The `admin` account is seeded through EF `HasData` in [User.cs](SafeCare/Data/Entities/User.cs) (i.e. inside the initial migration), *not* in `SeedData.sql`. `IdentitySeeder` throws at startup if that account is missing, so don't remove the `HasData` seed.
+
+### Two-factor authentication
+
+Mandatory for every account, using an authenticator app (TOTP — staff use Microsoft Authenticator). Sign-in is two posts: `/signin` checks the password and, for an account with 2FA, redirects to `/login/2fa` ([LoginTwoFactor.razor](SafeCare/Components/Pages/LoginTwoFactor.razor)), which posts the code to `/signin-2fa`. That one field also takes a recovery code. Wrong codes count towards the same lockout as wrong passwords.
+
+Enforcement is the **default authorization policy**, set in [IdentityConfig.cs](SafeCare/Utils/IdentityConfig.cs): a bare `[Authorize]` requires the `amr=mfa` claim Identity adds on a two-factor sign-in. An account without 2FA still signs in with its password, but that session reaches only `/account/2fa-setup` ([TwoFactorSetup.razor](SafeCare/Components/Pages/TwoFactorSetup.razor), policy `TwoFactorEnrollment`), and `RedirectUnauthorized` sends it there from everywhere else. Setup ends by signing out (`/signout?relogin=true`) and back in with a code — a circuit cannot reissue the cookie with the new claim. `SecurityStampValidator` rebuilds the principal from the database every 5 minutes and would drop `amr`; `OnRefreshingPrincipal` copies it over, so don't remove that.
+
+Never guard a page with `[Authorize(Roles = ...)]`: naming roles replaces the default policy instead of adding to it, so the page would admit a password-only session. Use the policies in [AuthPolicies.cs](SafeCare/Utils/AuthPolicies.cs) (`AuthPolicies.Admin` for admin pages); `PageAuthorizationTests` fails on a page that names roles.
+
+Lost phone: an admin resets the user's 2FA on `/admin/users` (`IUserManagementService.ResetTwoFactorAsync` — turns it off, discards the key, rotates the security stamp, emails the user), and the next sign-in leads through setup again. Admins can't reset their own; they sign in with a recovery code and use "Przenieś na nowy telefon" on `/account` ([TwoFactorService.cs](SafeCare/Services/TwoFactorService.cs)). The seeded admin has lockout switched on by `IdentitySeeder`, since the `HasData` seed leaves it off.
 
 ### Data
 
@@ -98,7 +108,7 @@ Fire-and-forget pipeline: services call `IEmailQueue.Enqueue` (unbounded `Channe
 ### Anti-abuse (public form)
 
 Two independent layers, both applied in `Home.Submit()` before validation:
-- `IRateLimitService` — in-memory sliding window, 5 submissions/min keyed by a per-circuit GUID. Distinct from the global ASP.NET `RateLimiter` (100 req/min per IP), which only covers the initial page load and `/signin`, `/signout` — everything else rides the SignalR circuit.
+- `IRateLimitService` — in-memory sliding window, 5 submissions/min keyed by a per-circuit GUID. Distinct from the global ASP.NET `RateLimiter` (100 req/min per IP), which only covers the initial page load and `/signin`, `/signin-2fa`, `/signout` — everything else rides the SignalR circuit.
 - `IBotDetectionService` + `HoneypotFields` — hidden fields plus a 5-second minimum fill time. On detection the submit **fails silently**; do not add user feedback there.
 
 ## Conventions

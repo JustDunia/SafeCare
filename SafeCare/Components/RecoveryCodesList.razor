@@ -1,0 +1,21 @@
+﻿@* Freshly generated recovery codes. Nothing in the application displays them again, so this
+   is the user's one chance to write them down — the warning says so. *@
+<MudAlert Severity="Severity.Warning" Class="mb-3">
+    Zapisz te kody odzyskiwania w bezpiecznym miejscu — nie zobaczysz ich ponownie.
+    Każdy kod działa jeden raz, zamiast kodu z aplikacji, gdy nie masz dostępu do telefonu.
+</MudAlert>
+<MudPaper Outlined Class="pa-4">
+    <MudGrid Spacing="1" data-testid="recovery-codes">
+        @foreach (var recoveryCode in Codes)
+        {
+            <MudItem xs="6">
+                <code>@recoveryCode</code>
+            </MudItem>
+        }
+    </MudGrid>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<string> Codes { get; set; } = [];
+}

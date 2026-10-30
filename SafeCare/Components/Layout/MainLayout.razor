@@ -1,9 +1,12 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using SafeCare.Data
 @using SafeCare.Data.Entities
 @using Serilog
 @inherits LayoutComponentBase
 @inject UserManager<User> UserManager
+@inject IDbContextFactory<AppDbContext> DbContextFactory
 
 <MudThemeProvider />
 <MudPopoverProvider />
@@ -102,7 +105,18 @@
             var user = authState.User;
             if (user.Identity is not null && user.Identity.IsAuthenticated)
             {
-                var userEntity = await UserManager.GetUserAsync(authState.User);
+                // A context of its own, not the circuit's UserManager: the page inside this
+                // layout initialises at the same moment, and a page that loads its user through
+                // UserManager would otherwise share one DbContext with this query and fail with
+                // "a second operation was started on this context".
+                var userId = Guid.TryParse(UserManager.GetUserId(user), out var id) ? id : (Guid?)null;
+                await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+                var userEntity = userId is null
+                    ? null
+                    : await dbContext.Users.AsNoTracking()
+                        .Where(u => u.Id == userId)
+                        .Select(u => new { u.FirstName, u.LastName })
+                        .SingleOrDefaultAsync();
 
                 if (userEntity is null)
                 {
@@ -119,7 +133,8 @@
 
                 firstName = userEntity.FirstName;
                 lastName = userEntity.LastName;
-                isAdmin = await UserManager.IsInRoleAsync(userEntity, AppRoles.Admin);
+                // Roles are claims in the cookie, refreshed with the security stamp.
+                isAdmin = user.IsInRole(AppRoles.Admin);
             }
         }
     }

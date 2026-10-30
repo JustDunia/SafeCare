@@ -7,10 +7,11 @@
 @using SafeCare.Data.Entities
 @using SafeCare.Mappings
 @using SafeCare.Services
+@using SafeCare.Utils
 @using SafeCare.Validators
 @using SafeCare.ViewModels
 @using Serilog
-@attribute [Authorize(Roles = AppRoles.Admin)]
+@attribute [Authorize(Policy = AuthPolicies.Admin)]
 @inject IUserManagementService UserManagementService
 @inject UserManager<User> UserManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -91,6 +92,7 @@
                         <MudTh>Imię i nazwisko</MudTh>
                         <MudTh>E-mail</MudTh>
                         <MudTh>Rola</MudTh>
+                        <MudTh>Weryfikacja dwuetapowa</MudTh>
                         <MudTh>Akcje</MudTh>
                     </HeaderContent>
                     <RowTemplate>
@@ -101,6 +103,25 @@
                             <MudChip T="string" Color="@(context.Role == AppRoles.Admin ? Color.Warning : Color.Info)">@context.Role</MudChip>
                         </MudTd>
                         <MudTd>
+                            @if (context.TwoFactorEnabled)
+                            {
+                                <MudChip T="string" Color="Color.Success">Włączona</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Default">Nieskonfigurowana</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            @* Disabled for one's own account: an administrator resets their own
+                               two-factor authentication from /account, with a recovery code. *@
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Warning"
+                                       Class="me-2"
+                                       Disabled="@(context.Id == currentUserId || !context.TwoFactorEnabled)"
+                                       OnClick="() => OpenResetTwoFactorDialogAsync(context)">
+                                Resetuj 2FA
+                            </MudButton>
                             <MudButton Variant="Variant.Outlined"
                                        Color="Color.Error"
                                        Disabled="@(context.Id == currentUserId)"
@@ -237,6 +258,44 @@
         }
 
         await DeleteUserAsync(user);
+    }
+
+    private async Task OpenResetTwoFactorDialogAsync(AdminUserListItemVm user)
+    {
+        var parameters = new DialogParameters
+        {
+            [nameof(ConfirmActionDialog.Message)] =
+                $"Zresetować weryfikację dwuetapową użytkownika {user.UserName}? Obecna aplikacja i kody odzyskiwania tego konta przestaną działać, a przy następnym logowaniu trzeba będzie skonfigurować aplikację od nowa. Użytkownik dostanie o tym e-mail.",
+            [nameof(ConfirmActionDialog.ConfirmText)] = "Tak, resetuj",
+            [nameof(ConfirmActionDialog.ConfirmColor)] = Color.Warning
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dialogRef = await DialogService.ShowAsync<ConfirmActionDialog>("Resetuj weryfikację dwuetapową", parameters, options);
+        var dialogResult = await dialogRef.Result;
+
+        if (dialogResult is null || dialogResult.Canceled)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await UserManagementService.ResetTwoFactorAsync(user.Id, currentUserId);
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? "Nie udało się zresetować weryfikacji dwuetapowej.", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Weryfikacja dwuetapowa została zresetowana.", Severity.Success);
+            await LoadUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error while resetting two-factor authentication for user {UserId}", user.Id);
+            Snackbar.Add("Nie udało się zresetować weryfikacji dwuetapowej.", Severity.Error);
+        }
     }
 
     private async Task DeleteUserAsync(AdminUserListItemVm user)

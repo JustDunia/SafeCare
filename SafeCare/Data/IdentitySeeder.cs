@@ -11,7 +11,7 @@ public static class IdentitySeeder
 {
     /// <summary>
     /// Ensures both roles exist and that the seeded administrator is a member of
-    /// <see cref="AppRoles.Admin"/>. Safe to run on every startup.
+    /// <see cref="AppRoles.Admin"/> with lockout enabled. Safe to run on every startup.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// The <c>admin</c> account is missing, or a role could not be created or assigned.
@@ -37,6 +37,18 @@ public static class IdentitySeeder
             {
                 var errors = string.Join(", ", addToRoleResult.Errors.Select(x => x.Description));
                 throw new InvalidOperationException($"Failed to assign admin role to seeded account: {errors}");
+            }
+        }
+
+        // The HasData seed predates lockout and leaves it off, which would give the one
+        // account that matters most unlimited guesses at its password and its two-factor code.
+        if (!await userManager.GetLockoutEnabledAsync(adminUser))
+        {
+            var lockoutResult = await userManager.SetLockoutEnabledAsync(adminUser, true);
+            if (!lockoutResult.Succeeded)
+            {
+                var errors = string.Join(", ", lockoutResult.Errors.Select(x => x.Description));
+                throw new InvalidOperationException($"Failed to enable lockout for seeded account: {errors}");
             }
         }
     }

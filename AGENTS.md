@@ -27,11 +27,13 @@ SafeCare/                          # Solution root
       Layout/                      # MainLayout, ReconnectModal (SignalR)
       Pages/
         Home.razor                 # "/"                    Public sectioned incident form
-        Login.razor                # "/login"                Staff authentication
+        Login.razor                # "/login"                Staff authentication, step 1: password
+        LoginTwoFactor.razor       # "/login/2fa"            Step 2: authenticator or recovery code
+        TwoFactorSetup.razor       # "/account/2fa-setup"    [Authorize(Policy = TwoFactorEnrollment)] Mandatory 2FA setup
         Dashboard.razor            # "/dashboard"            [Authorize] Incident grid
         IncidentDetails.razor      # "/details/{Id:int}"     [Authorize] Report detail
-        AccountSettings.razor      # "/account"              [Authorize] Notification opt-in
-        Admin/Users.razor          # "/admin/users"          [Authorize(Roles = Admin)]
+        AccountSettings.razor      # "/account"              [Authorize] Notifications, recovery codes, new phone
+        Admin/Users.razor          # "/admin/users"          [Authorize(Policy = AuthPolicies.Admin)] incl. 2FA reset
         Error.razor, NotFound.razor
     Data/
       AppDbContext.cs              # IdentityDbContext<User, IdentityRole<Guid>, Guid>
@@ -50,7 +52,7 @@ SafeCare/                          # Solution root
     Enums/                         # Gender, IncidentCategory, ReportStatus
     Exceptions/                    # DomainException, EntityNotFoundException
     Middlewares/                   # SecurityHeadersMiddleware
-    Endpoints/                     # POST /signin, POST /signout (Minimal API)
+    Endpoints/                     # POST /signin, /signin-2fa, /signout (Minimal API)
     Utils/                         # Config extensions (Identity, Email, RateLimiter, Logger)
 ```
 
@@ -67,7 +69,8 @@ SafeCare/                          # Solution root
 | Change dashboard filtering/sorting | `Services/IncidentReportService.GetReports` | See SORTING AND FILTERING below |
 | Change email behaviour | `Email/` | Provider from `Email:Provider` config |
 | Add security headers | `Middlewares/SecurityHeadersMiddleware.cs` | |
-| Modify auth | `Utils/IdentityConfig.cs` | Cookie auth, login path `/login` |
+| Modify auth | `Utils/IdentityConfig.cs` | Cookie auth, login path `/login`, 2FA default policy |
+| Modify two-factor authentication | `Services/TwoFactorService.cs`, `Utils/AuthPolicies.cs` | See TWO-FACTOR AUTHENTICATION below |
 | Modify roles | `Data/Entities/AppRoles.cs` | Constants only — never string literals |
 | Modify rate limiting | `Utils/RateLimiter.cs`, `Services/RateLimitService.cs` | Two separate layers |
 | Change logging | `appsettings.json` Serilog section | No code change needed |
@@ -99,7 +102,8 @@ Blazor Server cannot set cookies from inside a circuit — by the time a SignalR
 the HTTP response is long gone. Sign-in and sign-out are therefore **Minimal API form posts**
 to `/signin` and `/signout` (`Endpoints/SigninEndpoints.cs`). `Login.razor` is a plain
 `<form method="post" action="/signin">` carrying an `<AntiforgeryToken />`, and errors come
-back as `?error=` query parameters.
+back as `?error=` query parameters. The code step, `LoginTwoFactor.razor`, posts to
+`/signin-2fa` the same way.
 
 `returnUrl` handling has a sharp edge worth remembering: `/signin` only accepts site-relative
 paths starting with `/`, which is what prevents an open redirect. `NavigationManager.ToBaseRelativePath`
@@ -107,9 +111,11 @@ returns a path *without* a leading slash, so `RedirectUnauthorized` has to prepe
 escape the result — otherwise every returnUrl is silently discarded and users always land on
 `/dashboard`.
 
-Pages guard with `@attribute [Authorize]` or `[Authorize(Roles = AppRoles.Admin)]`.
-`<NotAuthorized>` in `Routes.razor` renders `RedirectUnauthorized`, which sends
-authenticated-but-forbidden users to `/dashboard` and anonymous users to `/login?returnUrl=…`.
+Pages guard with `@attribute [Authorize]` or `[Authorize(Policy = AuthPolicies.Admin)]` —
+never `[Authorize(Roles = ...)]`, see TWO-FACTOR AUTHENTICATION. `<NotAuthorized>` in
+`Routes.razor` renders `RedirectUnauthorized`, which sends authenticated-but-forbidden users to
+`/dashboard` (or to `/account/2fa-setup` if their session has no second factor) and anonymous
+users to `/login?returnUrl=…`.
 
 The `admin` account is seeded through EF `HasData` in `User.cs` — i.e. inside the initial
 migration — *not* in `SeedData.sql`. `IdentitySeeder` throws at startup if that account is
@@ -119,6 +125,37 @@ Security stamp validation runs every 5 minutes (not the 30-minute default), so a
 account an admin has just deleted is signed out reasonably promptly. Components must still
 tolerate an authenticated principal with no matching user row — `MainLayout` degrades to a
 shell without the account menu rather than throwing, since throwing there takes down every page.
+
+## TWO-FACTOR AUTHENTICATION
+
+Mandatory for every account, with an authenticator app (TOTP; staff use Microsoft
+Authenticator). Codes come from Identity's `AuthenticatorTokenProvider`, registered explicitly
+in `IdentityConfig` because `AddIdentityCore` registers no token providers.
+
+- **Sign-in** is two posts. `/signin` checks the password; for an account with 2FA Identity
+  sets its short-lived two-factor cookie and the user is sent to `/login/2fa`, which posts to
+  `/signin-2fa`. Six digits are an authenticator code, anything else is tried as a recovery
+  code. Wrong codes feed the same lockout as wrong passwords.
+- **Enforcement** is the default authorization policy: it requires the `amr=mfa` claim that
+  Identity adds to a principal signed in with a second factor. An account without 2FA still
+  gets a password-only session from `/signin`, but that session can open only
+  `/account/2fa-setup` (policy `TwoFactorEnrollment`). Setup finishes by posting
+  `/signout?relogin=true` and signing in again with a code, because a circuit cannot reissue
+  the cookie with the new claim.
+- **`[Authorize(Roles = ...)]` is a trap.** An attribute that names roles replaces the default
+  policy instead of combining with it, so it would let a password-only session in. Admin pages
+  use `AuthPolicies.Admin`; `PageAuthorizationTests` fails on any routable page that names
+  roles.
+- **Security stamp refresh** rebuilds the principal every 5 minutes and drops `amr`;
+  `OnRefreshingPrincipal` in `IdentityConfig` copies it across. Without it every user loses
+  access five minutes after signing in.
+- **Lost phone.** An admin resets another user's 2FA on `/admin/users`
+  (`UserManagementService.ResetTwoFactorAsync`): it is switched off, the key discarded, the
+  security stamp rotated, and the user emailed. Their next sign-in goes through setup. Admins
+  cannot reset their own — they sign in with a recovery code and use "Przenieś na nowy telefon"
+  on `/account`. If the only admin loses both phone and codes, the fix is in the database.
+- The seeded `admin` has lockout switched on by `IdentitySeeder`; the `HasData` seed leaves
+  it off.
 
 ## SORTING AND FILTERING
 

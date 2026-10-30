@@ -26,7 +26,8 @@ public static class IdentityServiceProvider
 
         services.AddIdentityCore<User>()
             .AddRoles<IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<AppDbContext>();
+            .AddEntityFrameworkStores<AppDbContext>()
+            .AddTokenProvider<AuthenticatorTokenProvider<User>>(TokenOptions.DefaultAuthenticatorProvider);
 
         return services.BuildServiceProvider();
     }

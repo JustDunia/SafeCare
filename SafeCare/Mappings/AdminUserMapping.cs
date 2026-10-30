@@ -31,7 +31,8 @@ public static class AdminUserMapping
                 UserName = dto.UserName,
                 FullName = $"{dto.FirstName} {dto.LastName}",
                 Email = dto.Email,
-                Role = dto.Role
+                Role = dto.Role,
+                TwoFactorEnabled = dto.TwoFactorEnabled
             };
         }
     }
